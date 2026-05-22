@@ -1,9 +1,10 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
+import { ROUTES } from "./constants.js";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
   apiVersion: 1,
-  version: "0.2.1",
+  version: "0.2.2",
   displayName: "GitHub Manager",
   description: "Plugin Paperclip para gerenciar repositorios, PRs, issues e webhooks GitHub",
   author: "CUS",
@@ -42,17 +43,33 @@ const manifest: PaperclipPluginManifestV1 = {
   ui: {
     slots: [
       {
-        type: "sidebar",
-        id: "github-nav",
+        type: "sidebarPanel",
+        id: "github-module",
         displayName: "GitHub",
-        exportName: "GitHubSidebar",
+        exportName: "GitHubSidebarModule",
         order: 45
       },
       {
         type: "routeSidebar",
         id: "github-route-nav",
         displayName: "GitHub",
-        routePath: "github",
+        routePath: ROUTES.repos,
+        exportName: "GitHubRouteSidebar",
+        order: 45
+      },
+      {
+        type: "routeSidebar",
+        id: "github-settings-route-nav",
+        displayName: "GitHub",
+        routePath: ROUTES.settings,
+        exportName: "GitHubRouteSidebar",
+        order: 45
+      },
+      {
+        type: "routeSidebar",
+        id: "github-prs-route-nav",
+        displayName: "GitHub",
+        routePath: ROUTES.pullRequests,
         exportName: "GitHubRouteSidebar",
         order: 45
       },
@@ -64,10 +81,26 @@ const manifest: PaperclipPluginManifestV1 = {
       },
       {
         type: "page",
-        id: "github-home",
-        displayName: "GitHub",
-        routePath: "github",
-        exportName: "GitHubPage",
+        id: "github-settings-page",
+        displayName: "GitHub — Configurações",
+        routePath: ROUTES.settings,
+        exportName: "GitHubSettingsPage",
+        order: 45
+      },
+      {
+        type: "page",
+        id: "github-repos-page",
+        displayName: "GitHub — Repositórios",
+        routePath: ROUTES.repos,
+        exportName: "GitHubReposPage",
+        order: 45
+      },
+      {
+        type: "page",
+        id: "github-prs-page",
+        displayName: "GitHub — Pull requests",
+        routePath: ROUTES.pullRequests,
+        exportName: "GitHubPullRequestsPage",
         order: 45
       }
     ]

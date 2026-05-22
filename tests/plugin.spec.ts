@@ -12,7 +12,8 @@ describe("github-manager plugin", () => {
     expect(manifest.capabilities).toContain("webhooks.receive");
     expect(manifest.capabilities).toContain("ui.sidebar.register");
     expect(manifest.capabilities).toContain("ui.page.register");
-    expect(manifest.ui?.slots?.some((s) => s.type === "sidebar")).toBe(true);
+    expect(manifest.ui?.slots?.some((s) => s.type === "sidebarPanel")).toBe(true);
+    expect(manifest.ui?.slots?.filter((s) => s.type === "page").length).toBeGreaterThanOrEqual(3);
     expect(manifest.jobs?.[0]?.jobKey).toBe("sync-github");
     expect(manifest.webhooks?.[0]?.endpointKey).toBe("github-events");
   });
