@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   useHostContext,
+  useHostLocation,
+  useHostNavigation,
   usePluginAction,
   usePluginData,
+  type PluginSidebarProps,
   type PluginWidgetProps
 } from "@paperclipai/plugin-sdk/ui";
 import type { GitHubRepoSummary, ReposData, SyncOverviewData } from "../types.js";
@@ -41,6 +44,64 @@ const buttonStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.06)",
   cursor: "pointer"
 };
+
+const GITHUB_ROUTE = "/github";
+
+const sidebarLinkClass =
+  "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors no-underline";
+const sidebarLinkActiveClass = "bg-accent text-foreground";
+const sidebarLinkIdleClass = "text-foreground/80 hover:bg-accent/50 hover:text-foreground";
+
+/** Company sidebar entry — links to the GitHub plugin page. */
+export function GitHubSidebar(_props: PluginSidebarProps) {
+  const nav = useHostNavigation();
+  const { pathname } = useHostLocation();
+  const href = nav.resolveHref(GITHUB_ROUTE);
+  const isActive = pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <a
+      {...nav.linkProps(GITHUB_ROUTE)}
+      className={`${sidebarLinkClass} ${isActive ? sidebarLinkActiveClass : sidebarLinkIdleClass}`}
+    >
+      <span className="flex-1 truncate">GitHub</span>
+    </a>
+  );
+}
+
+/** Route sidebar when viewing /:company/github. */
+export function GitHubRouteSidebar(_props: PluginSidebarProps) {
+  const nav = useHostNavigation();
+
+  return (
+    <nav style={{ display: "flex", flexDirection: "column", gap: "0.25rem", padding: "0.5rem 0" }}>
+      <a
+        {...nav.linkProps("/dashboard")}
+        className={`${sidebarLinkClass} ${sidebarLinkIdleClass}`}
+      >
+        <span className="flex-1 truncate">← Company dashboard</span>
+      </a>
+      <div
+        style={{
+          padding: "0.75rem 0.75rem 0.25rem",
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          opacity: 0.55
+        }}
+      >
+        GitHub
+      </div>
+      <a
+        {...nav.linkProps(GITHUB_ROUTE)}
+        className={`${sidebarLinkClass} ${sidebarLinkActiveClass}`}
+      >
+        <span className="flex-1 truncate">Repositories & sync</span>
+      </a>
+    </nav>
+  );
+}
 
 function RepoTable({ repos }: { repos: GitHubRepoSummary[] }) {
   if (repos.length === 0) {

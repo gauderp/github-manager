@@ -10,7 +10,9 @@ describe("github-manager plugin", () => {
     expect(manifest.capabilities).toContain("http.outbound");
     expect(manifest.capabilities).toContain("jobs.schedule");
     expect(manifest.capabilities).toContain("webhooks.receive");
+    expect(manifest.capabilities).toContain("ui.sidebar.register");
     expect(manifest.capabilities).toContain("ui.page.register");
+    expect(manifest.ui?.slots?.some((s) => s.type === "sidebar")).toBe(true);
     expect(manifest.jobs?.[0]?.jobKey).toBe("sync-github");
     expect(manifest.webhooks?.[0]?.endpointKey).toBe("github-events");
   });
