@@ -1,15 +1,15 @@
-/** Plugin page route segments (manifest `routePath`). */
+/** Plugin page route segments (manifest `routePath` — single slug, no slashes). */
 export const ROUTES = {
   repos: "github",
-  settings: "github/settings",
-  pullRequests: "github/pull-requests"
+  settings: "github-settings",
+  pullRequests: "github-pull-requests"
 } as const;
 
 /** Host navigation paths (use with `linkProps`). */
 export const PATHS = {
   repos: "/github",
-  settings: "/github/settings",
-  pullRequests: "/github/pull-requests",
+  settings: "/github-settings",
+  pullRequests: "/github-pull-requests",
   companySecrets: "/company/settings"
 } as const;
 

@@ -4,7 +4,7 @@ import { ROUTES } from "./constants.js";
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
   apiVersion: 1,
-  version: "0.2.2",
+  version: "0.2.3",
   displayName: "GitHub Manager",
   description: "Plugin Paperclip para gerenciar repositorios, PRs, issues e webhooks GitHub",
   author: "CUS",

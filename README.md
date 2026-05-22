@@ -34,7 +34,7 @@ Cada **release no GitHub** (tag `v*`, ex. `v0.2.2`) dispara o workflow [publish-
 ### Primeira vez / credencial
 
 1. No repo **gauderp/github-manager** → Settings → Secrets → Actions: criar `NPM_TOKEN` (token npm com publish no escopo `@gaud_erp`, bypass 2FA se a org exigir).
-2. Criar release no GitHub: tag `v0.2.2` apontando para `main` (Actions roda typecheck, test, build, `npm publish`).
+2. Criar release no GitHub: tag `v0.2.3` apontando para `main` (Actions roda typecheck, test, build, `npm publish`).
 3. Confirmar: `npm view @gaud_erp/github-manager version`
 
 ### Próximas versões
@@ -46,7 +46,7 @@ Cada **release no GitHub** (tag `v*`, ex. `v0.2.2`) dispara o workflow [publish-
 ## Production install (npm)
 
 ```bash
-paperclipai plugin install @gaud_erp/github-manager@0.2.2 --api-base http://127.0.0.1:3100
+paperclipai plugin install @gaud_erp/github-manager@0.2.3 --api-base http://127.0.0.1:3100
 paperclipai plugin inspect cus.github-manager --api-base http://127.0.0.1:3100
 ```
 
