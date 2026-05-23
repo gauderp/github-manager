@@ -84,19 +84,27 @@ describe("github-manager plugin", () => {
   });
 
   it("registers GitHub review agent tools", async () => {
-    const harness = createTestHarness({
-      manifest,
-      capabilities: [...manifest.capabilities, "events.emit"]
-    });
-    harness.seed({ companies: [{ id: "co_tools", name: "CUS", issuePrefix: "CUS" } as never] });
-    await plugin.definition.setup(harness.ctx);
+    const prevToken = process.env.GITHUB_TOKEN;
+    delete process.env.GITHUB_TOKEN;
+    try {
+      const harness = createTestHarness({
+        manifest,
+        capabilities: [...manifest.capabilities, "events.emit"]
+      });
+      harness.seed({ companies: [{ id: "co_tools", name: "CUS", issuePrefix: "CUS" } as never] });
+      await plugin.definition.setup(harness.ctx);
 
-    const diff = await harness.executeTool("github_get_pull_request_diff", {
-      owner: "acme",
-      repo: "api",
-      pr_number: 1
-    });
-    expect(diff.error).toBeTruthy();
-    expect(String(diff.content)).toMatch(/token/i);
+      const diff = await harness.executeTool("github_get_pull_request_diff", {
+        owner: "acme",
+        repo: "api",
+        pr_number: 1
+      });
+      expect(diff.error).toBeTruthy();
+      expect(String(diff.content)).toMatch(/token/i);
+    } finally {
+      if (prevToken) {
+        process.env.GITHUB_TOKEN = prevToken;
+      }
+    }
   });
 });
