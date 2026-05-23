@@ -5,9 +5,10 @@ import plugin from "../src/worker.js";
 import { buildInboundWebhookUrl, parseRepoFullName } from "../src/github-api.js";
 
 describe("github-manager plugin", () => {
-  it("declares connector capabilities including sync and webhooks", () => {
+  it("declares connector capabilities including sync, webhooks, and agent tools", () => {
     expect(manifest.capabilities).toContain("events.subscribe");
     expect(manifest.capabilities).toContain("http.outbound");
+    expect(manifest.capabilities).toContain("agent.tools.register");
     expect(manifest.capabilities).toContain("jobs.schedule");
     expect(manifest.capabilities).toContain("webhooks.receive");
     expect(manifest.capabilities).toContain("ui.sidebar.register");
@@ -80,5 +81,22 @@ describe("github-manager plugin", () => {
     expect(buildInboundWebhookUrl("cus.github-manager")).toBe(
       "http://127.0.0.1:3100/api/plugins/cus.github-manager/webhooks/github-events"
     );
+  });
+
+  it("registers GitHub review agent tools", async () => {
+    const harness = createTestHarness({
+      manifest,
+      capabilities: [...manifest.capabilities, "events.emit"]
+    });
+    harness.seed({ companies: [{ id: "co_tools", name: "CUS", issuePrefix: "CUS" } as never] });
+    await plugin.definition.setup(harness.ctx);
+
+    const diff = await harness.executeTool("github_get_pull_request_diff", {
+      owner: "acme",
+      repo: "api",
+      pr_number: 1
+    });
+    expect(diff.error).toBeTruthy();
+    expect(String(diff.content)).toMatch(/token/i);
   });
 });

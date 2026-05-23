@@ -17,6 +17,7 @@ import {
   GITHUB_WEBHOOK_ENDPOINT,
   parseRepoFullName
 } from "./github-api.js";
+import { registerGithubReviewTools } from "./github-review-tools.js";
 import type {
   GitHubIssueSummary,
   GitHubPullRequestSummary,
@@ -387,6 +388,8 @@ async function handleGithubWebhook(input: PluginWebhookInput): Promise<void> {
 const plugin = definePlugin({
   async setup(ctx) {
     workerCtx = ctx;
+
+    registerGithubReviewTools(ctx);
 
     ctx.events.on("issue.created", async (event) => {
       const issueId = event.entityId ?? "unknown";

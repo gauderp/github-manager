@@ -1,6 +1,6 @@
 {
   "name": "@gaud_erp/paperclip-github-manager",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Paperclip connector plugin for GitHub repos, PR/issue sync, and webhooks",
   "publishConfig": {

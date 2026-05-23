@@ -8,6 +8,29 @@ Paperclip connector plugin for GitHub — repository listing, PR/issue sync, and
 - Sync open pull requests and issues (manual actions + scheduled job)
 - Register GitHub webhooks pointing at the Paperclip host inbound URL
 - Dashboard health widget and full **GitHub** page in the host UI
+- **Agent tools** for autonomous PR code review (diff, inline comments, review verdict, file read, repo list, issue search)
+
+## Agent reviewer workflow
+
+Tools are exposed to Paperclip agents as `cus.github-manager/github_*` (plugin-namespaced at runtime).
+
+1. **Collect** — `github_get_pull_request_diff` with `owner`, `repo`, `pr_number`
+2. **Analyze** — agent reads metadata + unified diff (truncated above ~120k chars with a changed-files index)
+3. **Context** (optional) — `github_read_file_content` when the diff is insufficient
+4. **Inline feedback** (optional) — `github_create_review_comment` per finding (`commit_id` = PR head SHA)
+5. **Verdict** — `github_submit_pr_review` with `APPROVE`, `REQUEST_CHANGES`, or `COMMENT`
+
+Supporting tools: `github_list_repositories`, `github_search_issues`.
+
+### Configuration
+
+| Variable | Purpose |
+|----------|---------|
+| `GITHUB_TOKEN` | Optional worker-level PAT fallback |
+| `GITHUB_DEFAULT_OWNER` | Default org/user when `owner` is omitted in list tools |
+| `GITHUB_API_URL` | API base (GitHub Enterprise), default `https://api.github.com` |
+
+Per-company PAT in **GitHub → Configurações** is preferred for multi-tenant installs.
 
 ## Requirements
 
@@ -46,7 +69,7 @@ Cada **release no GitHub** (tag `v*`, ex. `v0.3.0`) dispara o workflow [publish-
 ## Production install (npm)
 
 ```bash
-paperclipai plugin install @gaud_erp/paperclip-github-manager@0.3.0 --api-base http://127.0.0.1:3100
+paperclipai plugin install @gaud_erp/paperclip-github-manager@0.4.0 --api-base http://127.0.0.1:3100
 paperclipai plugin inspect cus.github-manager --api-base http://127.0.0.1:3100
 ```
 
