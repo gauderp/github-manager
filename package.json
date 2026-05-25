@@ -14,10 +14,14 @@
   },
   "files": [
     "dist",
+    "src/db/migrations",
     "package.json",
     "README.md",
     "LICENSE"
   ],
+  "paperclip": {
+    "manifest": "./dist/manifest.js"
+  },
   "dependencies": {
     "@paperclipai/plugin-sdk": "2026.517.0"
   },

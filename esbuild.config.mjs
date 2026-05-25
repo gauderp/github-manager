@@ -13,6 +13,17 @@ const workerConfig = {
   external: ["@paperclipai/plugin-sdk"],
 };
 
+const manifestConfig = {
+  entryPoints: ["src/manifest.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node22",
+  format: "esm",
+  outfile: "dist/manifest.js",
+  sourcemap: true,
+  external: ["@paperclipai/plugin-sdk"],
+};
+
 const uiConfig = {
   entryPoints: ["src/ui/index.tsx"],
   bundle: true,
@@ -26,13 +37,14 @@ const uiConfig = {
 };
 
 if (isWatch) {
-  const [workerCtx, uiCtx] = await Promise.all([
+  const [workerCtx, manifestCtx, uiCtx] = await Promise.all([
     context(workerConfig),
+    context(manifestConfig),
     context(uiConfig),
   ]);
-  await Promise.all([workerCtx.watch(), uiCtx.watch()]);
+  await Promise.all([workerCtx.watch(), manifestCtx.watch(), uiCtx.watch()]);
   console.log("Watching for changes...");
 } else {
-  await Promise.all([build(workerConfig), build(uiConfig)]);
+  await Promise.all([build(workerConfig), build(manifestConfig), build(uiConfig)]);
   console.log("Build complete.");
 }

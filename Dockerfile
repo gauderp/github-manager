@@ -33,6 +33,9 @@ RUN mkdir -p /app/data/instances/default/secrets \
 COPY config.json /app/data/instances/default/config.json
 COPY master.key /app/data/instances/default/secrets/master.key
 
+# Stage GitHub Manager plugin for runtime install
+COPY gaud_erp-paperclip-github-manager-1.0.0.tgz /app/plugins/github-manager.tgz
+
 # Entrypoint script to inject credentials from env vars at runtime
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
