@@ -31,7 +31,6 @@ const manifest: PaperclipPluginManifestV1 = {
     "ui.dashboardWidget.register",
     "ui.detailTab.register",
     "ui.action.register",
-    "ui.contextMenuItem.register",
   ],
 
   entrypoints: {
