@@ -1,0 +1,95 @@
+import type { PluginContext } from "@paperclipai/plugin-sdk";
+import { githubFetch } from "../github/api-client.js";
+import {
+  upsertRepo, listRepos, upsertPR, upsertIssue,
+  createSyncLog, completeSyncLog,
+} from "../db/queries.js";
+import { detectAndLinkCards } from "./link-detector.js";
+import type { GitHubRepo, GitHubPR, GitHubIssue } from "../types.js";
+
+export async function runFullSync(ctx: PluginContext, companyId: string): Promise<void> {
+  const repos = await listRepos(ctx.database);
+  if (repos.length === 0) return;
+
+  const logId = await createSyncLog(ctx.database, "full");
+  let reposSynced = 0;
+  let prsSynced = 0;
+  let issuesSynced = 0;
+  const errors: string[] = [];
+
+  for (const repo of repos) {
+    try {
+      const { data: repoData } = await githubFetch(ctx, companyId, `/repos/${repo.fullName}`);
+      const rd = repoData as Record<string, unknown>;
+      await upsertRepo(ctx.database, {
+        id: rd.id as number,
+        fullName: rd.full_name as string,
+        owner: (rd.owner as Record<string, unknown>).login as string,
+        name: rd.name as string,
+        private: rd.private as boolean,
+        defaultBranch: rd.default_branch as string,
+        htmlUrl: rd.html_url as string,
+        description: rd.description as string | null,
+        language: rd.language as string | null,
+        topics: (rd.topics as string[]) ?? [],
+        updatedAt: rd.updated_at as string,
+      });
+
+      const { data: prs } = await githubFetch(
+        ctx, companyId,
+        `/repos/${repo.fullName}/pulls?state=open&per_page=100`,
+      );
+      for (const item of prs as Array<Record<string, unknown>>) {
+        const pr: Omit<GitHubPR, "syncedAt"> = {
+          id: item.id as number,
+          repoId: repo.id,
+          number: item.number as number,
+          title: item.title as string,
+          body: item.body as string | null,
+          state: "open",
+          author: (item.user as Record<string, unknown>).login as string,
+          headBranch: (item.head as Record<string, unknown>).ref as string,
+          baseBranch: (item.base as Record<string, unknown>).ref as string,
+          htmlUrl: item.html_url as string,
+          draft: item.draft as boolean,
+          mergeable: item.mergeable as boolean | null,
+          mergedAt: null,
+          createdAt: item.created_at as string,
+          updatedAt: item.updated_at as string,
+        };
+        await upsertPR(ctx.database, pr);
+        await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
+        prsSynced++;
+      }
+
+      const { data: issues } = await githubFetch(
+        ctx, companyId,
+        `/repos/${repo.fullName}/issues?state=open&per_page=100&filter=all`,
+      );
+      for (const item of (issues as Array<Record<string, unknown>>).filter((i) => !i.pull_request)) {
+        const issue: Omit<GitHubIssue, "syncedAt"> = {
+          id: item.id as number,
+          repoId: repo.id,
+          number: item.number as number,
+          title: item.title as string,
+          body: item.body as string | null,
+          state: item.state as string,
+          author: (item.user as Record<string, unknown>).login as string,
+          labels: ((item.labels as Array<Record<string, unknown>>) ?? []).map((l) => l.name as string),
+          htmlUrl: item.html_url as string,
+          createdAt: item.created_at as string,
+          updatedAt: item.updated_at as string,
+        };
+        await upsertIssue(ctx.database, issue);
+        issuesSynced++;
+      }
+
+      reposSynced++;
+    } catch (err) {
+      errors.push(`${repo.fullName}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  await completeSyncLog(ctx.database, logId, { reposSynced, prsSynced, issuesSynced, errors });
+  ctx.logger.info(`Full sync done: ${reposSynced} repos, ${prsSynced} PRs, ${issuesSynced} issues`);
+}
