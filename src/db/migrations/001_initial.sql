@@ -1,6 +1,4 @@
-CREATE SCHEMA IF NOT EXISTS cus_github_manager;
-
-CREATE TABLE IF NOT EXISTS cus_github_manager.gh_repositories (
+CREATE TABLE IF NOT EXISTS plugin_cus_github_manager_d2300af002.gh_repositories (
   id            BIGINT PRIMARY KEY,
   full_name     TEXT NOT NULL UNIQUE,
   owner         TEXT NOT NULL,
@@ -15,9 +13,9 @@ CREATE TABLE IF NOT EXISTS cus_github_manager.gh_repositories (
   synced_at     TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS cus_github_manager.gh_pull_requests (
+CREATE TABLE IF NOT EXISTS plugin_cus_github_manager_d2300af002.gh_pull_requests (
   id            BIGINT PRIMARY KEY,
-  repo_id       BIGINT NOT NULL REFERENCES cus_github_manager.gh_repositories(id) ON DELETE CASCADE,
+  repo_id       BIGINT NOT NULL REFERENCES plugin_cus_github_manager_d2300af002.gh_repositories(id) ON DELETE CASCADE,
   number        INTEGER NOT NULL,
   title         TEXT NOT NULL,
   body          TEXT,
@@ -35,9 +33,9 @@ CREATE TABLE IF NOT EXISTS cus_github_manager.gh_pull_requests (
   UNIQUE(repo_id, number)
 );
 
-CREATE TABLE IF NOT EXISTS cus_github_manager.gh_issues (
+CREATE TABLE IF NOT EXISTS plugin_cus_github_manager_d2300af002.gh_issues (
   id            BIGINT PRIMARY KEY,
-  repo_id       BIGINT NOT NULL REFERENCES cus_github_manager.gh_repositories(id) ON DELETE CASCADE,
+  repo_id       BIGINT NOT NULL REFERENCES plugin_cus_github_manager_d2300af002.gh_repositories(id) ON DELETE CASCADE,
   number        INTEGER NOT NULL,
   title         TEXT NOT NULL,
   body          TEXT,
@@ -51,16 +49,16 @@ CREATE TABLE IF NOT EXISTS cus_github_manager.gh_issues (
   UNIQUE(repo_id, number)
 );
 
-CREATE TABLE IF NOT EXISTS cus_github_manager.gh_pr_card_links (
+CREATE TABLE IF NOT EXISTS plugin_cus_github_manager_d2300af002.gh_pr_card_links (
   id            SERIAL PRIMARY KEY,
-  pr_id         BIGINT NOT NULL REFERENCES cus_github_manager.gh_pull_requests(id) ON DELETE CASCADE,
+  pr_id         BIGINT NOT NULL REFERENCES plugin_cus_github_manager_d2300af002.gh_pull_requests(id) ON DELETE CASCADE,
   issue_id      TEXT NOT NULL,
   link_source   TEXT NOT NULL CHECK(link_source IN ('webhook', 'pattern', 'manual')),
   created_at    TEXT NOT NULL,
   UNIQUE(pr_id, issue_id)
 );
 
-CREATE TABLE IF NOT EXISTS cus_github_manager.gh_sync_log (
+CREATE TABLE IF NOT EXISTS plugin_cus_github_manager_d2300af002.gh_sync_log (
   id            SERIAL PRIMARY KEY,
   scope         TEXT NOT NULL CHECK(scope IN ('full', 'incremental', 'webhook')),
   repos_synced  INTEGER NOT NULL DEFAULT 0,

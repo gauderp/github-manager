@@ -10,12 +10,14 @@ import type {
 
 type DB = PluginContext["db"];
 
+const S = "plugin_cus_github_manager_d2300af002";
+
 // ── Repositories ──
 
 export async function upsertRepo(db: DB, repo: Omit<GitHubRepo, "syncedAt">): Promise<void> {
   const now = new Date().toISOString();
   await db.execute(
-    `INSERT INTO gh_repositories (id, full_name, owner, name, private, default_branch, html_url, description, language, topics, updated_at, synced_at)
+    `INSERT INTO ${S}.gh_repositories (id, full_name, owner, name, private, default_branch, html_url, description, language, topics, updated_at, synced_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (id) DO UPDATE SET
        full_name = EXCLUDED.full_name,
@@ -36,12 +38,12 @@ export async function upsertRepo(db: DB, repo: Omit<GitHubRepo, "syncedAt">): Pr
 }
 
 export async function listRepos(db: DB): Promise<GitHubRepo[]> {
-  const rows = await db.query("SELECT * FROM gh_repositories ORDER BY full_name");
+  const rows = await db.query(`SELECT * FROM ${S}.gh_repositories ORDER BY full_name`);
   return rows.map(mapRepo);
 }
 
 export async function getRepoByFullName(db: DB, fullName: string): Promise<GitHubRepo | null> {
-  const rows = await db.query("SELECT * FROM gh_repositories WHERE full_name = $1", [fullName]);
+  const rows = await db.query(`SELECT * FROM ${S}.gh_repositories WHERE full_name = $1`, [fullName]);
   return rows.length > 0 ? mapRepo(rows[0]) : null;
 }
 
@@ -67,7 +69,7 @@ function mapRepo(row: Record<string, unknown>): GitHubRepo {
 export async function upsertPR(db: DB, pr: Omit<GitHubPR, "syncedAt">): Promise<void> {
   const now = new Date().toISOString();
   await db.execute(
-    `INSERT INTO gh_pull_requests (id, repo_id, number, title, body, state, author, head_branch, base_branch, html_url, draft, mergeable, merged_at, created_at, updated_at, synced_at)
+    `INSERT INTO ${S}.gh_pull_requests (id, repo_id, number, title, body, state, author, head_branch, base_branch, html_url, draft, mergeable, merged_at, created_at, updated_at, synced_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT (repo_id, number) DO UPDATE SET
        title = EXCLUDED.title, body = EXCLUDED.body, state = EXCLUDED.state,
@@ -87,8 +89,8 @@ export async function listPRs(
   filters?: { repoId?: number; state?: string; author?: string },
 ): Promise<PRWithRepo[]> {
   let sql = `SELECT p.*, r.full_name AS repo_full_name
-             FROM gh_pull_requests p
-             JOIN gh_repositories r ON r.id = p.repo_id
+             FROM ${S}.gh_pull_requests p
+             JOIN ${S}.gh_repositories r ON r.id = p.repo_id
              WHERE 1=1`;
   const params: unknown[] = [];
   let idx = 1;
@@ -116,8 +118,8 @@ export async function getPRByRepoAndNumber(
 ): Promise<PRWithRepo | null> {
   const rows = await db.query(
     `SELECT p.*, r.full_name AS repo_full_name
-     FROM gh_pull_requests p
-     JOIN gh_repositories r ON r.id = p.repo_id
+     FROM ${S}.gh_pull_requests p
+     JOIN ${S}.gh_repositories r ON r.id = p.repo_id
      WHERE p.repo_id = $1 AND p.number = $2`,
     [repoId, number],
   );
@@ -151,7 +153,7 @@ function mapPRWithRepo(row: Record<string, unknown>): PRWithRepo {
 export async function upsertIssue(db: DB, issue: Omit<GitHubIssue, "syncedAt">): Promise<void> {
   const now = new Date().toISOString();
   await db.execute(
-    `INSERT INTO gh_issues (id, repo_id, number, title, body, state, author, labels, html_url, created_at, updated_at, synced_at)
+    `INSERT INTO ${S}.gh_issues (id, repo_id, number, title, body, state, author, labels, html_url, created_at, updated_at, synced_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      ON CONFLICT (repo_id, number) DO UPDATE SET
        title = EXCLUDED.title, body = EXCLUDED.body, state = EXCLUDED.state,
@@ -170,7 +172,7 @@ export async function linkPRToCard(
   db: DB, prId: number, issueId: string, source: PRCardLink["linkSource"],
 ): Promise<void> {
   await db.execute(
-    `INSERT INTO gh_pr_card_links (pr_id, issue_id, link_source, created_at)
+    `INSERT INTO ${S}.gh_pr_card_links (pr_id, issue_id, link_source, created_at)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (pr_id, issue_id) DO NOTHING`,
     [prId, issueId, source, new Date().toISOString()],
@@ -180,9 +182,9 @@ export async function linkPRToCard(
 export async function getLinksForCard(db: DB, issueId: string): Promise<PRWithRepo[]> {
   const rows = await db.query(
     `SELECT p.*, r.full_name AS repo_full_name
-     FROM gh_pr_card_links l
-     JOIN gh_pull_requests p ON p.id = l.pr_id
-     JOIN gh_repositories r ON r.id = p.repo_id
+     FROM ${S}.gh_pr_card_links l
+     JOIN ${S}.gh_pull_requests p ON p.id = l.pr_id
+     JOIN ${S}.gh_repositories r ON r.id = p.repo_id
      WHERE l.issue_id = $1
      ORDER BY p.updated_at DESC`,
     [issueId],
@@ -192,7 +194,7 @@ export async function getLinksForCard(db: DB, issueId: string): Promise<PRWithRe
 
 export async function getLinksForPR(db: DB, prId: number): Promise<PRCardLink[]> {
   const rows = await db.query(
-    "SELECT * FROM gh_pr_card_links WHERE pr_id = $1",
+    `SELECT * FROM ${S}.gh_pr_card_links WHERE pr_id = $1`,
     [prId],
   );
   return rows.map((r: Record<string, unknown>) => ({
@@ -211,11 +213,11 @@ export async function createSyncLog(
 ): Promise<number> {
   const now = new Date().toISOString();
   await db.execute(
-    `INSERT INTO gh_sync_log (scope, started_at) VALUES ($1, $2)`,
+    `INSERT INTO ${S}.gh_sync_log (scope, started_at) VALUES ($1, $2)`,
     [scope, now],
   );
   const rows = await db.query<{ id: number }>(
-    `SELECT id FROM gh_sync_log WHERE scope = $1 AND started_at = $2 ORDER BY id DESC LIMIT 1`,
+    `SELECT id FROM ${S}.gh_sync_log WHERE scope = $1 AND started_at = $2 ORDER BY id DESC LIMIT 1`,
     [scope, now],
   );
   return rows[0].id;
@@ -225,14 +227,14 @@ export async function completeSyncLog(
   db: DB, id: number, stats: { reposSynced: number; prsSynced: number; issuesSynced: number; errors: string[] },
 ): Promise<void> {
   await db.execute(
-    `UPDATE gh_sync_log SET repos_synced=$1, prs_synced=$2, issues_synced=$3, errors=$4, finished_at=$5 WHERE id=$6`,
+    `UPDATE ${S}.gh_sync_log SET repos_synced=$1, prs_synced=$2, issues_synced=$3, errors=$4, finished_at=$5 WHERE id=$6`,
     [stats.reposSynced, stats.prsSynced, stats.issuesSynced, JSON.stringify(stats.errors), new Date().toISOString(), id],
   );
 }
 
 export async function getLastSyncTime(db: DB): Promise<string | null> {
   const rows = await db.query(
-    "SELECT finished_at FROM gh_sync_log WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1",
+    `SELECT finished_at FROM ${S}.gh_sync_log WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1`,
   );
   return rows.length > 0 ? (rows[0].finished_at as string) : null;
 }
