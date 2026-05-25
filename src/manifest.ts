@@ -27,6 +27,11 @@ const manifest: PaperclipPluginManifestV1 = {
     "agents.read",
     "issues.read",
     "companies.read",
+    "ui.page.register",
+    "ui.dashboardWidget.register",
+    "ui.detailTab.register",
+    "ui.action.register",
+    "ui.contextMenuItem.register",
   ],
 
   entrypoints: {
