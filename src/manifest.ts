@@ -196,6 +196,7 @@ const manifest: PaperclipPluginManifestV1 = {
         id: "github-context-menu",
         exportName: "GitHubContextMenu",
         displayName: "GitHub Actions",
+        entityTypes: ["issue"],
       },
     ],
   },
