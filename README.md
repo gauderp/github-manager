@@ -84,9 +84,31 @@ npm pack             # gera .tgz
 
 ## Instalação
 
+### Via UI (recomendado)
+
+1. Acesse sua instância Paperclip (ex: `https://paperclip.gaud.app`)
+2. No menu lateral, clique em **Settings** (ícone de engrenagem)
+3. Navegue até a seção **Plugins**
+4. Clique em **Install Plugin**
+5. Faça upload do arquivo `.tgz` (`gaud_erp-paperclip-github-manager-1.0.0.tgz`)
+6. Aguarde a instalação — o status mudará para **Ready**
+7. O plugin aparecerá na lista com as 6 tools e o job de sync registrados
+
+### Via CLI
+
 ```bash
 paperclipai plugin install ./gaud_erp-paperclip-github-manager-1.0.0.tgz
 ```
+
+### Via Dockerfile (deploy automatizado)
+
+Para instalar automaticamente durante o deploy (ex: Fly.io), adicione o `.tgz` ao Dockerfile e use o entrypoint para instalar via API após o servidor iniciar:
+
+```dockerfile
+COPY gaud_erp-paperclip-github-manager-1.0.0.tgz /app/plugins/github-manager.tgz
+```
+
+No `entrypoint.sh`, o plugin é extraído e instalado via `POST /api/plugins/install` após o Paperclip estar pronto. Veja o `entrypoint.sh` deste repositório como referência.
 
 ## Configuração
 
