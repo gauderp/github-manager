@@ -84,13 +84,13 @@ npm pack             # gera .tgz
 
 ## Instalação
 
-### Via UI (recomendado)
+### Via UI do Paperclip (recomendado)
 
 1. Acesse sua instância Paperclip (ex: `https://paperclip.gaud.app`)
 2. No menu lateral, clique em **Settings** (ícone de engrenagem)
 3. Navegue até a seção **Plugins**
 4. Clique em **Install Plugin**
-5. Faça upload do arquivo `.tgz` (`gaud_erp-paperclip-github-manager-1.0.0.tgz`)
+5. Informe o nome do pacote npm: `@gaud_erp/paperclip-github-manager`
 6. Aguarde a instalação — o status mudará para **Ready**
 7. O plugin aparecerá na lista com as 6 tools e o job de sync registrados
 
