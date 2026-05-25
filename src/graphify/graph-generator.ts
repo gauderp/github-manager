@@ -29,8 +29,8 @@ export async function generateHighLevelGraph(
   ctx: PluginContext,
   companyId: string,
 ): Promise<GraphData> {
-  const repos = await listRepos(ctx.database);
-  const prs = await listPRs(ctx.database, { state: "open" });
+  const repos = await listRepos(ctx.db);
+  const prs = await listPRs(ctx.db, { state: "open" });
 
   const nodes: GraphNode[] = repos.map((r) => ({
     id: `repo:${r.fullName}`,

@@ -32,7 +32,7 @@ async function handlePullRequestEvent(
   const repoData = payload.repository as Record<string, unknown>;
   if (!prData || !repoData) return;
 
-  await upsertRepo(ctx.database, {
+  await upsertRepo(ctx.db, {
     id: repoData.id as number,
     fullName: repoData.full_name as string,
     owner: (repoData.owner as Record<string, unknown>).login as string,
@@ -67,7 +67,7 @@ async function handlePullRequestEvent(
     updatedAt: prData.updated_at as string,
   };
 
-  await upsertPR(ctx.database, pr);
+  await upsertPR(ctx.db, pr);
   await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
   ctx.logger.info(`Webhook: upserted PR #${pr.number} from ${repoData.full_name}`);
 }
@@ -80,7 +80,7 @@ async function handleIssuesEvent(
   const repoData = payload.repository as Record<string, unknown>;
   if (!issueData || !repoData) return;
 
-  await upsertRepo(ctx.database, {
+  await upsertRepo(ctx.db, {
     id: repoData.id as number,
     fullName: repoData.full_name as string,
     owner: (repoData.owner as Record<string, unknown>).login as string,
@@ -110,6 +110,6 @@ async function handleIssuesEvent(
     updatedAt: issueData.updated_at as string,
   };
 
-  await upsertIssue(ctx.database, issue);
+  await upsertIssue(ctx.db, issue);
   ctx.logger.info(`Webhook: upserted issue #${issue.number} from ${repoData.full_name}`);
 }

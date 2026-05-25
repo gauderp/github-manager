@@ -1,3 +1,5 @@
+import type React from "react";
+
 export const ROUTES = {
   settings: "github-settings",
   repos: "github-repos",

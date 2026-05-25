@@ -11,7 +11,7 @@ describe("webhook-handler", () => {
       parsedBody: {},
       requestId: "req-1",
     } as any);
-    expect(ctx.database.mutate).not.toHaveBeenCalled();
+    expect(ctx.db.execute).not.toHaveBeenCalled();
   });
 
   it("processes pull_request event and upserts", async () => {
@@ -43,15 +43,16 @@ describe("webhook-handler", () => {
       },
       requestId: "req-2",
     } as any);
-    expect(ctx.database.mutate).toHaveBeenCalled();
+    expect(ctx.db.execute).toHaveBeenCalled();
   });
 });
 
 function mockCtx() {
   return {
-    database: {
+    db: {
       query: vi.fn(async () => []),
       mutate: vi.fn(async () => undefined),
+      execute: vi.fn(async () => ({ rowCount: 1 })),
     },
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     http: { fetch: vi.fn() },

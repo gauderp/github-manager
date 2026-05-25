@@ -36,22 +36,23 @@ export async function githubFetch(
   });
 
   const rateLimit: RateLimitInfo = {
-    remaining: Number(resp.headers?.["x-ratelimit-remaining"] ?? 5000),
-    limit: Number(resp.headers?.["x-ratelimit-limit"] ?? 5000),
+    remaining: Number(resp.headers.get("x-ratelimit-remaining") ?? 5000),
+    limit: Number(resp.headers.get("x-ratelimit-limit") ?? 5000),
     resetAt: new Date(
-      Number(resp.headers?.["x-ratelimit-reset"] ?? 0) * 1000,
+      Number(resp.headers.get("x-ratelimit-reset") ?? 0) * 1000,
     ).toISOString(),
   };
 
   if (!resp.ok) {
-    const body = typeof resp.body === "string" ? resp.body : JSON.stringify(resp.body);
+    const body = await resp.text();
     if (resp.status === 403 && rateLimit.remaining === 0) {
       throw new Error(`GitHub rate limit exceeded. Resets at ${rateLimit.resetAt}`);
     }
     throw new Error(`GitHub API ${resp.status}: ${body}`);
   }
 
-  return { data: resp.body, rateLimit };
+  const data = await resp.json();
+  return { data, rateLimit };
 }
 
 export function isRateLimitSafe(rateLimit: RateLimitInfo, threshold = 100): boolean {

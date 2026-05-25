@@ -1,0 +1,7 @@
+import type { WorkspaceCommandDefinition, WorkspaceRuntimeService } from "./types/workspace-runtime.js";
+export declare function listWorkspaceCommandDefinitions(workspaceRuntime: Record<string, unknown> | null | undefined): WorkspaceCommandDefinition[];
+export declare function listWorkspaceServiceCommandDefinitions(workspaceRuntime: Record<string, unknown> | null | undefined): WorkspaceCommandDefinition[];
+export declare function findWorkspaceCommandDefinition(workspaceRuntime: Record<string, unknown> | null | undefined, workspaceCommandId: string | null | undefined): WorkspaceCommandDefinition | null;
+export declare function scoreWorkspaceRuntimeServiceMatch(command: Pick<WorkspaceCommandDefinition, "serviceIndex" | "name" | "command" | "cwd">, runtimeService: Pick<WorkspaceRuntimeService, "configIndex" | "serviceName" | "command" | "cwd">): number;
+export declare function matchWorkspaceRuntimeServiceToCommand<T extends Pick<WorkspaceRuntimeService, "configIndex" | "serviceName" | "command" | "cwd">>(command: Pick<WorkspaceCommandDefinition, "serviceIndex" | "name" | "command" | "cwd">, runtimeServices: T[] | null | undefined): T | null;
+//# sourceMappingURL=workspace-commands.d.ts.map

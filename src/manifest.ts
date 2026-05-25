@@ -1,6 +1,6 @@
-import type { PluginManifest } from "@paperclipai/plugin-sdk";
+import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
-export const manifest: PluginManifest = {
+export const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
   version: "1.0.0",
   apiVersion: 1,
@@ -10,31 +10,29 @@ export const manifest: PluginManifest = {
   categories: ["connector", "automation"],
 
   capabilities: [
-    "config",
     "events.subscribe",
     "events.emit",
-    "http.request",
-    "secrets.resolve",
-    "state.read",
-    "state.write",
-    "database.query",
-    "database.mutate",
+    "http.outbound",
+    "secrets.read-ref",
+    "plugin.state.read",
+    "plugin.state.write",
+    "database.namespace.read",
+    "database.namespace.write",
+    "database.namespace.migrate",
     "jobs.schedule",
     "webhooks.receive",
-    "tools.register",
-    "agents.managed.reconcile",
+    "agent.tools.register",
+    "agents.managed",
     "agents.invoke",
+    "agents.read",
     "issues.read",
-    "ui.page.register",
-    "ui.sidebar.register",
-    "ui.detailTab.register",
-    "ui.dashboardWidget.register",
-    "ui.contextMenuItem.register",
-    "logging",
+    "companies.read",
   ],
 
-  worker: { source: "./dist/worker.js" },
-  ui: { source: "./dist/ui" },
+  entrypoints: {
+    worker: "./dist/worker.js",
+    ui: "./dist/ui",
+  },
 
   database: {
     migrationsDir: "src/db/migrations",
@@ -52,41 +50,92 @@ export const manifest: PluginManifest = {
   webhooks: [
     {
       endpointKey: "github-events",
+      displayName: "GitHub Events",
       description: "Receives GitHub webhook events (pull_request, issues)",
-      events: ["pull_request", "issues"],
     },
   ],
 
   tools: [
     {
-      toolKey: "github_get_pull_request_diff",
+      name: "github_get_pull_request_diff",
       displayName: "Get PR Diff",
       description: "Retrieve the unified diff of a GitHub pull request",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
     },
     {
-      toolKey: "github_read_file_content",
+      name: "github_read_file_content",
       displayName: "Read File",
       description: "Read a file from a GitHub repository",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          path: { type: "string" },
+          ref: { type: "string" },
+        },
+        required: ["owner", "repo", "path"],
+      },
     },
     {
-      toolKey: "github_create_review_comment",
+      name: "github_create_review_comment",
       displayName: "Add Review Comment",
       description: "Post an inline review comment on a pull request",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          commit_id: { type: "string" },
+          path: { type: "string" },
+          line: { type: "number" },
+          body: { type: "string" },
+        },
+        required: ["owner", "repo", "pull_number", "commit_id", "path", "line", "body"],
+      },
     },
     {
-      toolKey: "github_submit_pr_review",
+      name: "github_submit_pr_review",
       displayName: "Submit PR Review",
       description: "Submit a review verdict (approve, request changes, comment)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] },
+          body: { type: "string" },
+        },
+        required: ["owner", "repo", "pull_number", "event", "body"],
+      },
     },
     {
-      toolKey: "github_list_repositories",
+      name: "github_list_repositories",
       displayName: "List Repositories",
       description: "List all tracked GitHub repositories",
+      parametersSchema: { type: "object", properties: {} },
     },
     {
-      toolKey: "github_search_issues",
+      name: "github_search_issues",
       displayName: "Search Issues",
       description: "Search GitHub issues and PRs using search syntax",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+        },
+        required: ["query"],
+      },
     },
   ],
 
@@ -99,62 +148,55 @@ export const manifest: PluginManifest = {
     },
   ],
 
-  ui_slots: [
-    {
-      slot: "sidebar",
-      exportName: "GitHubSidebarLink",
-      displayName: "GitHub",
-    },
-    {
-      slot: "sidebarPanel",
-      exportName: "GitHubSidebarPanel",
-      displayName: "GitHub Quick View",
-    },
-    {
-      slot: "page",
-      exportName: "GitHubSettingsPage",
-      displayName: "Configurações GitHub",
-      routePath: "github-settings",
-    },
-    {
-      slot: "routeSidebar",
-      exportName: "GitHubRouteSidebar",
-      displayName: "GitHub Navigation",
-      routePaths: ["github-settings", "github-repos", "github-prs", "github-graphs"],
-    },
-    {
-      slot: "page",
-      exportName: "GitHubReposPage",
-      displayName: "Repositórios",
-      routePath: "github-repos",
-    },
-    {
-      slot: "page",
-      exportName: "GitHubPullRequestsPage",
-      displayName: "Pull Requests",
-      routePath: "github-prs",
-    },
-    {
-      slot: "page",
-      exportName: "GitHubGraphsPage",
-      displayName: "Knowledge Graphs",
-      routePath: "github-graphs",
-    },
-    {
-      slot: "dashboardWidget",
-      exportName: "GitHubDashboardWidget",
-      displayName: "GitHub Status",
-    },
-    {
-      slot: "detailTab",
-      exportName: "GitHubDetailTab",
-      displayName: "GitHub",
-      entityTypes: ["issue"],
-    },
-    {
-      slot: "contextMenuItem",
-      exportName: "GitHubContextMenu",
-      displayName: "GitHub Actions",
-    },
-  ],
+  ui: {
+    slots: [
+      {
+        type: "page",
+        id: "github-settings",
+        exportName: "GitHubSettingsPage",
+        displayName: "Configurações GitHub",
+        routePath: "github-settings",
+      },
+      {
+        type: "page",
+        id: "github-repos",
+        exportName: "GitHubReposPage",
+        displayName: "Repositórios",
+        routePath: "github-repos",
+      },
+      {
+        type: "page",
+        id: "github-prs",
+        exportName: "GitHubPullRequestsPage",
+        displayName: "Pull Requests",
+        routePath: "github-prs",
+      },
+      {
+        type: "page",
+        id: "github-graphs",
+        exportName: "GitHubGraphsPage",
+        displayName: "Knowledge Graphs",
+        routePath: "github-graphs",
+      },
+      {
+        type: "dashboardWidget",
+        id: "github-dashboard",
+        exportName: "GitHubDashboardWidget",
+        displayName: "GitHub Status",
+      },
+      {
+        type: "detailTab",
+        id: "github-detail",
+        exportName: "GitHubDetailTab",
+        displayName: "GitHub",
+        entityTypes: ["issue"],
+      },
+      {
+        type: "contextMenuItem",
+        id: "github-context-menu",
+        exportName: "GitHubContextMenu",
+        displayName: "GitHub Actions",
+      },
+    ],
+  },
 };

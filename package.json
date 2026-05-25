@@ -12,7 +12,12 @@
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },
-  "files": ["dist", "package.json", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@paperclipai/plugin-sdk": "2026.517.0"
   },
@@ -20,10 +25,11 @@
     "react": ">=18"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.0",
     "esbuild": "^0.25.0",
+    "react": "^18.3.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.2.0",
-    "react": "^18.3.0"
+    "vitest": "^3.2.0"
   }
 }

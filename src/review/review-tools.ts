@@ -1,22 +1,26 @@
-import type { PluginContext } from "@paperclipai/plugin-sdk";
+import type { PluginContext, ToolRunContext, ToolResult } from "@paperclipai/plugin-sdk";
 import { githubFetch } from "../github/api-client.js";
 
 const MAX_DIFF_CHARS = 120_000;
 const MAX_FILE_CHARS = 128_000;
 
 export function registerReviewTools(ctx: PluginContext): void {
-  ctx.tools.register("github_get_pull_request_diff", {
-    description: "Get the diff of a GitHub pull request for code review",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string", description: "Repository owner" },
-        repo: { type: "string", description: "Repository name" },
-        pull_number: { type: "number", description: "PR number" },
+  ctx.tools.register(
+    "github_get_pull_request_diff",
+    {
+      displayName: "Get PR Diff",
+      description: "Get the diff of a GitHub pull request for code review",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          pull_number: { type: "number", description: "PR number" },
+        },
+        required: ["owner", "repo", "pull_number"],
       },
-      required: ["owner", "repo", "pull_number"],
     },
-    handler: async (params, runCtx) => {
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
       const { owner, repo, pull_number } = params as { owner: string; repo: string; pull_number: number };
       const companyId = runCtx.companyId;
       if (!companyId) return { error: "No company context" };
@@ -53,21 +57,25 @@ export function registerReviewTools(ctx: PluginContext): void {
         data: { pr: { title: pr.title, number: pull_number, sha: (pr.head as Record<string, unknown>).sha }, files },
       };
     },
-  });
+  );
 
-  ctx.tools.register("github_read_file_content", {
-    description: "Read a file from a GitHub repository",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-        path: { type: "string", description: "File path in the repository" },
-        ref: { type: "string", description: "Branch, tag, or commit SHA (optional)" },
+  ctx.tools.register(
+    "github_read_file_content",
+    {
+      displayName: "Read File",
+      description: "Read a file from a GitHub repository",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          path: { type: "string", description: "File path in the repository" },
+          ref: { type: "string", description: "Branch, tag, or commit SHA (optional)" },
+        },
+        required: ["owner", "repo", "path"],
       },
-      required: ["owner", "repo", "path"],
     },
-    handler: async (params, runCtx) => {
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
       const { owner, repo, path, ref } = params as { owner: string; repo: string; path: string; ref?: string };
       const companyId = runCtx.companyId;
       if (!companyId) return { error: "No company context" };
@@ -87,24 +95,28 @@ export function registerReviewTools(ctx: PluginContext): void {
         data: { path, size: file.size, sha: file.sha },
       };
     },
-  });
+  );
 
-  ctx.tools.register("github_create_review_comment", {
-    description: "Add an inline review comment to a pull request",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-        pull_number: { type: "number" },
-        commit_id: { type: "string", description: "The SHA of the PR head commit" },
-        path: { type: "string", description: "File path relative to repo root" },
-        line: { type: "number", description: "Line number in the diff" },
-        body: { type: "string", description: "Comment text (markdown)" },
+  ctx.tools.register(
+    "github_create_review_comment",
+    {
+      displayName: "Add Review Comment",
+      description: "Add an inline review comment to a pull request",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          commit_id: { type: "string", description: "The SHA of the PR head commit" },
+          path: { type: "string", description: "File path relative to repo root" },
+          line: { type: "number", description: "Line number in the diff" },
+          body: { type: "string", description: "Comment text (markdown)" },
+        },
+        required: ["owner", "repo", "pull_number", "commit_id", "path", "line", "body"],
       },
-      required: ["owner", "repo", "pull_number", "commit_id", "path", "line", "body"],
     },
-    handler: async (params, runCtx) => {
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
       const { owner, repo, pull_number, commit_id, path, line, body } = params as {
         owner: string; repo: string; pull_number: number;
         commit_id: string; path: string; line: number; body: string;
@@ -119,22 +131,26 @@ export function registerReviewTools(ctx: PluginContext): void {
 
       return { content: `Comment added to ${path}:${line}` };
     },
-  });
+  );
 
-  ctx.tools.register("github_submit_pr_review", {
-    description: "Submit a pull request review with a verdict",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-        pull_number: { type: "number" },
-        event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] },
-        body: { type: "string", description: "Review summary (markdown)" },
+  ctx.tools.register(
+    "github_submit_pr_review",
+    {
+      displayName: "Submit PR Review",
+      description: "Submit a pull request review with a verdict",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] },
+          body: { type: "string", description: "Review summary (markdown)" },
+        },
+        required: ["owner", "repo", "pull_number", "event", "body"],
       },
-      required: ["owner", "repo", "pull_number", "event", "body"],
     },
-    handler: async (params, runCtx) => {
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
       const { owner, repo, pull_number, event, body } = params as {
         owner: string; repo: string; pull_number: number; event: string; body: string;
       };
@@ -148,31 +164,39 @@ export function registerReviewTools(ctx: PluginContext): void {
 
       return { content: `Review submitted: ${event}`, data: { event } };
     },
-  });
+  );
 
-  ctx.tools.register("github_list_repositories", {
-    description: "List tracked GitHub repositories",
-    parameters: { type: "object", properties: {} },
-    handler: async (_params, _runCtx) => {
+  ctx.tools.register(
+    "github_list_repositories",
+    {
+      displayName: "List Repositories",
+      description: "List tracked GitHub repositories",
+      parametersSchema: { type: "object", properties: {} },
+    },
+    async (_params: unknown, _runCtx: ToolRunContext): Promise<ToolResult> => {
       const { listRepos } = await import("../db/queries.js");
-      const repos = await listRepos(ctx.database);
+      const repos = await listRepos(ctx.db);
       return {
         content: repos.map((r) => `${r.fullName} (${r.language ?? "unknown"})`).join("\n"),
         data: { repos },
       };
     },
-  });
+  );
 
-  ctx.tools.register("github_search_issues", {
-    description: "Search GitHub issues and PRs using GitHub search syntax",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "GitHub search query (e.g. 'is:open label:bug')" },
+  ctx.tools.register(
+    "github_search_issues",
+    {
+      displayName: "Search Issues",
+      description: "Search GitHub issues and PRs using GitHub search syntax",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "GitHub search query (e.g. 'is:open label:bug')" },
+        },
+        required: ["query"],
       },
-      required: ["query"],
     },
-    handler: async (params, runCtx) => {
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
       const { query } = params as { query: string };
       const companyId = runCtx.companyId;
       if (!companyId) return { error: "No company context" };
@@ -188,5 +212,5 @@ export function registerReviewTools(ctx: PluginContext): void {
 
       return { content: items.map((i) => `#${i.number} ${i.title} [${i.state}]`).join("\n"), data: { items } };
     },
-  });
+  );
 }

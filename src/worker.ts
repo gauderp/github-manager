@@ -40,26 +40,26 @@ const plugin = definePlugin({
     // ── Data handlers (UI reads) ──
 
     ctx.data.register("repos", async ({ companyId }) => {
-      const repos = await listRepos(ctx.database);
-      const lastSync = await getLastSyncTime(ctx.database);
+      const repos = await listRepos(ctx.db);
+      const lastSync = await getLastSyncTime(ctx.db);
       return { repos, lastSync };
     });
 
     ctx.data.register("pull-requests", async ({ companyId, filters }) => {
       const f = filters as { repoId?: number; state?: string; author?: string } | undefined;
-      const prs = await listPRs(ctx.database, f);
+      const prs = await listPRs(ctx.db, f);
       return { pullRequests: prs };
     });
 
     ctx.data.register("card-prs", async ({ companyId, issueId }) => {
-      const prs = await getLinksForCard(ctx.database, issueId as string);
+      const prs = await getLinksForCard(ctx.db, issueId as string);
       return { pullRequests: prs };
     });
 
     ctx.data.register("sync-status", async () => {
-      const lastSync = await getLastSyncTime(ctx.database);
-      const repos = await listRepos(ctx.database);
-      const openPRs = await listPRs(ctx.database, { state: "open" });
+      const lastSync = await getLastSyncTime(ctx.db);
+      const repos = await listRepos(ctx.db);
+      const openPRs = await listPRs(ctx.db, { state: "open" });
       return {
         lastSync,
         repoCount: repos.length,
@@ -105,7 +105,7 @@ const plugin = definePlugin({
     ctx.actions.register("add-repo", async ({ companyId, fullName }) => {
       const { data } = await githubFetch(ctx, companyId as string, `/repos/${fullName}`);
       const rd = data as Record<string, unknown>;
-      await upsertRepo(ctx.database, {
+      await upsertRepo(ctx.db, {
         id: rd.id as number,
         fullName: rd.full_name as string,
         owner: (rd.owner as Record<string, unknown>).login as string,
@@ -132,21 +132,23 @@ const plugin = definePlugin({
     });
 
     ctx.actions.register("link-pr-to-card", async ({ prId, issueId }) => {
-      await linkPRToCard(ctx.database, prId as number, issueId as string, "manual");
+      await linkPRToCard(ctx.db, prId as number, issueId as string, "manual");
       return { ok: true };
     });
 
     ctx.actions.register("request-review", async ({ companyId, prId, repoFullName, prNumber, agentId }) => {
-      const repo = await getRepoByFullName(ctx.database, repoFullName as string);
+      const repo = await getRepoByFullName(ctx.db, repoFullName as string);
       if (!repo) throw new Error(`Repo ${repoFullName} not found`);
 
       const [owner, repoName] = (repoFullName as string).split("/");
 
-      await ctx.agents.invoke({
-        agentId: agentId as string,
-        companyId: companyId as string,
-        message: `Please review PR #${prNumber} in ${repoFullName}. Use the github_get_pull_request_diff tool with owner="${owner}", repo="${repoName}", pull_number=${prNumber} to get the diff, then provide a thorough code review. Post your findings as inline comments using github_create_review_comment and submit your final verdict using github_submit_pr_review.`,
-      });
+      await ctx.agents.invoke(
+        agentId as string,
+        companyId as string,
+        {
+          prompt: `Please review PR #${prNumber} in ${repoFullName}. Use the github_get_pull_request_diff tool with owner="${owner}", repo="${repoName}", pull_number=${prNumber} to get the diff, then provide a thorough code review. Post your findings as inline comments using github_create_review_comment and submit your final verdict using github_submit_pr_review.`,
+        },
+      );
 
       return { ok: true };
     });
@@ -166,7 +168,7 @@ const plugin = definePlugin({
 
     // ── Managed agent reconciliation ──
     ctx.events.on("company.created", async (event) => {
-      await ctx.agents.managed.reconcile(event.payload.companyId);
+      await ctx.agents.managed.reconcile("github-reviewer", event.companyId);
     });
   },
 
@@ -186,4 +188,4 @@ const plugin = definePlugin({
 
 export default plugin;
 
-runWorker(plugin);
+runWorker(plugin, import.meta.url);

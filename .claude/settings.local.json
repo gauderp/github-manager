@@ -14,7 +14,9 @@
       "Bash(npm search:*)",
       "WebFetch(domain:docs.paperclip.ing)",
       "WebFetch(domain:api.github.com)",
-      "Bash(rtk git:*)"
+      "Bash(rtk git:*)",
+      "Bash(rtk vitest:*)",
+      "Bash(rtk tsc:*)"
     ]
   }
 }

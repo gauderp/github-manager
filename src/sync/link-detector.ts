@@ -28,7 +28,7 @@ export async function detectAndLinkCards(
 ): Promise<string[]> {
   const cardIds = extractCardIds(branch, title);
   for (const cardId of cardIds) {
-    await linkPRToCard(ctx.database, prId, cardId, "pattern");
+    await linkPRToCard(ctx.db, prId, cardId, "pattern");
   }
   return cardIds;
 }

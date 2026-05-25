@@ -8,13 +8,13 @@ import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
 export async function runIncrementalSync(ctx: PluginContext, companyId: string): Promise<void> {
-  const repos = await listRepos(ctx.database);
+  const repos = await listRepos(ctx.db);
   if (repos.length === 0) return;
 
-  const lastSync = await getLastSyncTime(ctx.database);
+  const lastSync = await getLastSyncTime(ctx.db);
   const since = lastSync ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const logId = await createSyncLog(ctx.database, "incremental");
+  const logId = await createSyncLog(ctx.db, "incremental");
   let reposSynced = 0;
   let prsSynced = 0;
   let issuesSynced = 0;
@@ -35,7 +35,7 @@ export async function runIncrementalSync(ctx: PluginContext, companyId: string):
     }
   }
 
-  await completeSyncLog(ctx.database, logId, { reposSynced, prsSynced, issuesSynced, errors });
+  await completeSyncLog(ctx.db, logId, { reposSynced, prsSynced, issuesSynced, errors });
   ctx.logger.info(`Incremental sync done: ${reposSynced} repos, ${prsSynced} PRs, ${issuesSynced} issues`);
 }
 
@@ -75,7 +75,7 @@ async function syncRepoPRs(
       updatedAt: item.updated_at as string,
     };
 
-    await upsertPR(ctx.database, pr);
+    await upsertPR(ctx.db, pr);
     await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
   }
 
@@ -112,7 +112,7 @@ async function syncRepoIssues(
       updatedAt: item.updated_at as string,
     };
 
-    await upsertIssue(ctx.database, issue);
+    await upsertIssue(ctx.db, issue);
   }
 
   return items.length;

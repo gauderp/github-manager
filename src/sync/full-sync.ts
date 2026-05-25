@@ -8,10 +8,10 @@ import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubRepo, GitHubPR, GitHubIssue } from "../types.js";
 
 export async function runFullSync(ctx: PluginContext, companyId: string): Promise<void> {
-  const repos = await listRepos(ctx.database);
+  const repos = await listRepos(ctx.db);
   if (repos.length === 0) return;
 
-  const logId = await createSyncLog(ctx.database, "full");
+  const logId = await createSyncLog(ctx.db, "full");
   let reposSynced = 0;
   let prsSynced = 0;
   let issuesSynced = 0;
@@ -21,7 +21,7 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
     try {
       const { data: repoData } = await githubFetch(ctx, companyId, `/repos/${repo.fullName}`);
       const rd = repoData as Record<string, unknown>;
-      await upsertRepo(ctx.database, {
+      await upsertRepo(ctx.db, {
         id: rd.id as number,
         fullName: rd.full_name as string,
         owner: (rd.owner as Record<string, unknown>).login as string,
@@ -57,7 +57,7 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
           createdAt: item.created_at as string,
           updatedAt: item.updated_at as string,
         };
-        await upsertPR(ctx.database, pr);
+        await upsertPR(ctx.db, pr);
         await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
         prsSynced++;
       }
@@ -80,7 +80,7 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
           createdAt: item.created_at as string,
           updatedAt: item.updated_at as string,
         };
-        await upsertIssue(ctx.database, issue);
+        await upsertIssue(ctx.db, issue);
         issuesSynced++;
       }
 
@@ -90,6 +90,6 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
     }
   }
 
-  await completeSyncLog(ctx.database, logId, { reposSynced, prsSynced, issuesSynced, errors });
+  await completeSyncLog(ctx.db, logId, { reposSynced, prsSynced, issuesSynced, errors });
   ctx.logger.info(`Full sync done: ${reposSynced} repos, ${prsSynced} PRs, ${issuesSynced} issues`);
 }
