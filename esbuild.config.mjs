@@ -10,7 +10,6 @@ const workerConfig = {
   format: "esm",
   outfile: "dist/worker.js",
   sourcemap: true,
-  external: ["@paperclipai/plugin-sdk"],
 };
 
 const manifestConfig = {
