@@ -40,17 +40,38 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-# Install staged plugins
+# Install staged plugins using API key
+API_KEY="pcp_board_90394c8d61bdd3653c607ed2eca190cc64ef9ea016e271c0"
 for tgz in /app/plugins/*.tgz; do
   [ -f "$tgz" ] || continue
   plugin_name=$(basename "$tgz" .tgz)
   echo "Installing plugin: $plugin_name"
-  if paperclipai plugin install "$tgz" --data-dir /app/data --local 2>&1; then
+
+  # Extract tgz to temp dir (API needs a directory, not a tarball)
+  PLUGIN_DIR="/tmp/plugin-install-${plugin_name}"
+  rm -rf "$PLUGIN_DIR"
+  mkdir -p "$PLUGIN_DIR"
+  tar xzf "$tgz" -C "$PLUGIN_DIR"
+
+  # Find the package directory (npm pack creates a 'package/' subfolder)
+  PKG_DIR="$PLUGIN_DIR/package"
+  [ -d "$PKG_DIR" ] || PKG_DIR="$PLUGIN_DIR"
+
+  RESULT=$(curl -s -w "\n%{http_code}" -X POST http://127.0.0.1:3100/api/plugins/install \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -d "{\"packageName\":\"$PKG_DIR\",\"isLocalPath\":true}")
+  HTTP_CODE=$(echo "$RESULT" | tail -1)
+  BODY=$(echo "$RESULT" | sed '$d')
+
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
     echo "Plugin $plugin_name installed successfully"
     rm "$tgz"
   else
-    echo "Plugin $plugin_name install failed (may already be installed)"
+    echo "Plugin $plugin_name install returned $HTTP_CODE: $BODY"
   fi
+
+  rm -rf "$PLUGIN_DIR"
 done
 
 # Wait for the Paperclip process
