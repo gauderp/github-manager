@@ -57,6 +57,7 @@ for tgz in /app/plugins/*.tgz; do
   PKG_DIR="$PLUGIN_DIR/package"
   [ -d "$PKG_DIR" ] || PKG_DIR="$PLUGIN_DIR"
 
+  # Try install first
   RESULT=$(curl -s -w "\n%{http_code}" -X POST http://127.0.0.1:3100/api/plugins/install \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $API_KEY" \
@@ -67,6 +68,28 @@ for tgz in /app/plugins/*.tgz; do
   if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
     echo "Plugin $plugin_name installed successfully"
     rm "$tgz"
+  elif echo "$BODY" | grep -q "already installed"; then
+    echo "Plugin $plugin_name already installed, attempting reinstall..."
+    # Get plugin ID from the list
+    PLUGINS_RESULT=$(curl -s -H "Authorization: Bearer $API_KEY" http://127.0.0.1:3100/api/plugins)
+    PLUGIN_ID=$(echo "$PLUGINS_RESULT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [ -n "$PLUGIN_ID" ]; then
+      # Uninstall then reinstall
+      curl -s -X DELETE "http://127.0.0.1:3100/api/plugins/$PLUGIN_ID" \
+        -H "Authorization: Bearer $API_KEY"
+      echo "Uninstalled plugin $PLUGIN_ID, reinstalling..."
+      sleep 2
+      RESULT2=$(curl -s -w "\n%{http_code}" -X POST http://127.0.0.1:3100/api/plugins/install \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $API_KEY" \
+        -d "{\"packageName\":\"$PKG_DIR\",\"isLocalPath\":true}")
+      HTTP_CODE2=$(echo "$RESULT2" | tail -1)
+      BODY2=$(echo "$RESULT2" | sed '$d')
+      echo "Reinstall returned $HTTP_CODE2: $BODY2"
+      if [ "$HTTP_CODE2" = "200" ] || [ "$HTTP_CODE2" = "201" ]; then
+        rm "$tgz"
+      fi
+    fi
   else
     echo "Plugin $plugin_name install returned $HTTP_CODE: $BODY"
   fi
