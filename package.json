@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Paperclip plugin for GitHub repos, PR/issue sync, card integration, agent review, and graphify",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gauderp/paperclip-github-manager"
+  },
   "type": "module",
   "scripts": {
     "dev": "node esbuild.config.mjs --watch",
