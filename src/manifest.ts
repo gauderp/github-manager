@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "1.0.0",
+  version: "1.1.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -29,6 +29,7 @@ const manifest: PaperclipPluginManifestV1 = {
     "companies.read",
     "ui.page.register",
     "ui.dashboardWidget.register",
+    "ui.sidebar.register",
     "ui.detailTab.register",
     "ui.action.register",
   ],
@@ -154,6 +155,12 @@ const manifest: PaperclipPluginManifestV1 = {
 
   ui: {
     slots: [
+      {
+        type: "sidebar",
+        id: "github-sidebar",
+        exportName: "GitHubSidebarLink",
+        displayName: "GitHub",
+      },
       {
         type: "page",
         id: "github-settings",
