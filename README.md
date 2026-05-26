@@ -1,164 +1,136 @@
-# GitHub Manager v2 — Paperclip Plugin
+# GitHub Manager — Paperclip Plugin
 
-Plugin para o Paperclip que integra repositórios GitHub com sincronização local, PRs vinculados a cards, revisão de código por agentes IA, e knowledge graphs.
+[![npm version](https://img.shields.io/npm/v/@gaud_erp/paperclip-github-manager.svg)](https://www.npmjs.com/package/@gaud_erp/paperclip-github-manager)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Funcionalidades
+Open-source [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings GitHub repository management, PR/issue sync, AI-powered code reviews, and knowledge graphs into your Paperclip instance.
 
-- **Sync 3 camadas**: webhooks (tempo real), cron 5min (safety net), sync manual completo
-- **PR ↔ Card**: detecção automática de links via branch/título (CARD-123, #456)
-- **Review por agentes**: ferramentas para agentes IA revisarem PRs (diff, comentários inline, veredito)
-- **Quick check**: checklist automático (descrição, testes, arquivos sensíveis)
-- **Graphify**: knowledge graphs de alto nível e por repositório
-- **DB local**: zero chamadas à API GitHub ao renderizar UI — tudo lido do banco
+## Features
 
-## Arquitetura
+- **3-layer sync**: webhooks (real-time) + cron every 5 min (safety net) + manual full sync
+- **PR ↔ Card linking**: automatic detection via branch name or title patterns (CARD-123, #456)
+- **AI code review**: 7 agent tools for reviewing PRs (diff, inline comments, verdicts)
+- **Repo structure cache**: agents get a pre-built codebase map in one call, saving 60-90% of tokens
+- **Managed skill**: `github-codebase-access` skill teaches agents how to navigate repos via tools
+- **Knowledge graphs**: visual repo structure, exportable as Obsidian Canvas (`.canvas`)
+- **Local DB**: zero GitHub API calls when rendering UI — all data read from synced database
 
-```
-src/
-  manifest.ts           — declaração de capabilities, slots, tools, agents
-  worker.ts             — entry point: registra jobs, data/action handlers, webhook
-  types.ts              — tipos compartilhados
-  db/
-    migrations/001.sql  — tabelas: repos, PRs, issues, links, sync_log
-    queries.ts          — camada de queries tipada
-  sync/
-    webhook-handler.ts  — processa eventos GitHub (PR, issues)
-    incremental-sync.ts — cron 5min: busca atualizações desde último sync
-    full-sync.ts        — sync manual completo
-    link-detector.ts    — regex matching para vincular PRs a cards
-  github/
-    api-client.ts       — fetch autenticado com rate-limit awareness
-    config.ts           — resolução de token (PAT → secret → env)
-  review/
-    review-tools.ts     — 6 ferramentas para agentes: diff, read, comment, submit, list, search
-    quick-check.ts      — checklist automático de PR
-  graphify/
-    graph-generator.ts  — gera grafos de repositórios e código
-  ui/
-    index.tsx           — re-exports de todos os componentes
-    components/         — Settings, Repos, PRs, Graphs, DetailTab, Dashboard, Sidebar
-```
+## Installation
 
-## UI Slots
+### Via Paperclip UI (recommended)
 
-| Slot | Componente | Descrição |
-|------|-----------|-----------|
-| sidebar | GitHubSidebarLink | Link na sidebar principal |
-| sidebarPanel | GitHubSidebarPanel | Painel rápido com contadores |
-| routeSidebar | GitHubRouteSidebar | Navegação entre páginas GitHub |
-| page | GitHubSettingsPage | Token, repos, sync |
-| page | GitHubReposPage | Lista de repositórios |
-| page | GitHubPullRequestsPage | PRs com filtros |
-| page | GitHubGraphsPage | Knowledge graphs |
-| dashboardWidget | GitHubDashboardWidget | Status no dashboard |
-| detailTab | GitHubDetailTab | Tab GitHub dentro de cards |
-| contextMenuItem | GitHubContextMenu | Ação no menu de contexto |
-
-## Agent Tools
-
-| Tool | Descrição |
-|------|-----------|
-| `github_get_pull_request_diff` | Diff unificado de um PR |
-| `github_read_file_content` | Lê arquivo do repositório |
-| `github_create_review_comment` | Comentário inline no PR |
-| `github_submit_pr_review` | Submete review (approve/request_changes/comment) |
-| `github_list_repositories` | Lista repos rastreados |
-| `github_search_issues` | Busca issues/PRs via GitHub search |
-
-## Desenvolvimento
-
-```bash
-npm install
-npm run dev          # watch mode
-npm run build        # build de produção
-npm run typecheck    # verificação de tipos
-npm test             # testes (vitest)
-```
-
-## Release
-
-```bash
-npm run build
-npm pack             # gera .tgz
-```
-
-## Instalação
-
-### Via UI do Paperclip (recomendado)
-
-1. Acesse sua instância Paperclip (ex: `https://paperclip.gaud.app`)
-2. No menu lateral, clique em **Settings** (ícone de engrenagem)
-3. Navegue até a seção **Plugins**
-4. Clique em **Install Plugin**
-5. Informe o nome do pacote npm: `@gaud_erp/paperclip-github-manager`
-6. Aguarde a instalação — o status mudará para **Ready**
-7. O plugin aparecerá na lista com as 6 tools e o job de sync registrados
+1. Open your Paperclip instance
+2. Go to **Settings > Plugins**
+3. Click **Install Plugin**
+4. Enter the npm package name: `@gaud_erp/paperclip-github-manager`
+5. Wait for installation — status will change to **Ready**
 
 ### Via CLI
 
 ```bash
-# pelo nome do pacote npm
 paperclipai plugin install @gaud_erp/paperclip-github-manager
-
-# ou pelo arquivo .tgz local
-paperclipai plugin install ./gaud_erp-paperclip-github-manager-1.0.0.tgz
 ```
 
-### Via Dockerfile (deploy automatizado)
+## Configuration
 
-Para instalar automaticamente durante o deploy (ex: Fly.io), adicione o `.tgz` ao Dockerfile e use o entrypoint para instalar via API após o servidor iniciar:
+1. Go to **Settings > Plugins > GitHub Manager > Configuration**
+2. Enter your GitHub Personal Access Token (PAT)
+3. Optionally set the **Default Organization** to auto-discover repos on first sync
+4. Click **Save**
+5. Navigate to **GitHub > Repositories** and click **Sync**
 
-```dockerfile
-COPY gaud_erp-paperclip-github-manager-1.0.0.tgz /app/plugins/github-manager.tgz
+### Required GitHub PAT permissions
+
+- `repo` — full access to private repositories
+- `read:org` — list organization repositories
+
+### Webhook (optional)
+
+Set up a GitHub webhook pointing to:
+
+```
+https://<your-paperclip-host>/plugins/cus.github-manager/webhooks/github-events
 ```
 
-No `entrypoint.sh`, o plugin é extraído e instalado via `POST /api/plugins/install` após o Paperclip estar pronto. Veja o `entrypoint.sh` deste repositório como referência.
+Events: `pull_request`, `issues`
 
-## Configuração
+## Agent Tools
 
-1. Acesse **GitHub > Configurações** no Paperclip
-2. Configure o Personal Access Token (PAT) ou secret reference
-3. Teste a conexão
-4. Adicione repositórios (formato `owner/repo`)
-5. O sync automático inicia a cada 5 minutos
+The plugin registers 7 tools available to Paperclip agents:
 
-### Permissões GitHub necessárias (PAT)
+| Tool | Description |
+|------|-------------|
+| `github_get_repo_structure` | Get cached directory/file structure (call this FIRST) |
+| `github_get_pull_request_diff` | Get unified diff of a PR |
+| `github_read_file_content` | Read a file from a repository |
+| `github_create_review_comment` | Post an inline review comment on a PR |
+| `github_submit_pr_review` | Submit a review verdict (approve/request_changes/comment) |
+| `github_list_repositories` | List all tracked repositories |
+| `github_search_issues` | Search issues and PRs using GitHub search syntax |
 
-- `repo` (acesso completo a repos privados)
-- `read:org` (listar repos da org)
+### Agent Skill
 
-### Webhook (opcional)
+The plugin ships a managed skill **`github-codebase-access`** that appears in your Paperclip skill library. Enable it on any agent (CEO, FoundingEngineer, etc.) to give it access to GitHub repositories without needing local filesystem access.
 
-Configure um webhook no GitHub apontando para:
+## UI Pages
+
+| Page | Description |
+|------|-------------|
+| **Repositories** | List synced repos, trigger sync, generate knowledge graphs |
+| **Pull Requests** | Browse PRs with filters by repo, state, author |
+| **Knowledge Graphs** | Generate and export repo structure graphs (Obsidian Canvas) |
+| **Settings** | Configure GitHub PAT, default org, sync interval |
+
+The plugin also adds a **dashboard widget** (GitHub Status), a **detail tab** on issue cards (linked PRs), and a **sidebar link** for quick navigation.
+
+## Architecture
+
 ```
-https://<paperclip-host>/plugins/cus.github-manager/webhooks/github-events
+src/
+  manifest.ts           — capabilities, tools, agents, skills, UI slots
+  worker.ts             — jobs, data/action handlers, webhook registration
+  types.ts              — shared types
+  db/
+    migrations/         — PostgreSQL schema (plugin-namespaced)
+    queries.ts          — typed query layer
+  sync/
+    webhook-handler.ts  — real-time GitHub event processing
+    incremental-sync.ts — cron job: fetch updates since last sync
+    full-sync.ts        — full sync with auto-discovery
+    link-detector.ts    — regex matching for PR ↔ card linking
+  github/
+    api-client.ts       — authenticated fetch with rate-limit awareness
+    config.ts           — token resolution (config → state → env)
+  review/
+    review-tools.ts     — 7 agent tools registration
+    quick-check.ts      — automated PR checklist
+  graphify/
+    graph-generator.ts  — high-level and code-level graph generation
+  ui/
+    index.tsx           — component re-exports
+    components/         — Settings, Repos, PRs, Graphs, Dashboard, DetailTab, Sidebar
 ```
-Eventos: `pull_request`, `issues`
 
-## Uso
+## Development
 
-### Repositórios
+```bash
+npm install
+npm run dev          # watch mode
+npm run build        # production build
+npm run typecheck    # type checking
+npm test             # tests (vitest)
+```
 
-Após configurar o token, acesse **GitHub > Repositórios** para ver a lista de repos rastreados. Use o botão **Sync** para forçar uma sincronização completa. O sync incremental roda automaticamente a cada 5 minutos.
+## Publishing
 
-### Pull Requests
+Releases are published automatically to npm via GitHub Actions when a new release is created on GitHub.
 
-A página **GitHub > Pull Requests** lista todos os PRs sincronizados com filtros por repositório, estado e autor. PRs são vinculados automaticamente a cards do Paperclip quando o branch ou título contém padrões como `CARD-123` ou `#456`.
+```bash
+npm version patch    # or minor/major
+git push && git push --tags
+# Then create a GitHub release from the tag
+```
 
-### Review por Agentes
+## License
 
-O agente **GitHub Code Reviewer** pode revisar PRs usando as 6 tools registradas:
-
-1. Atribua um PR a um agente no Paperclip
-2. O agente usa `github_get_pull_request_diff` para obter o diff
-3. Lê arquivos com `github_read_file_content` quando precisa de contexto
-4. Posta comentários inline com `github_create_review_comment`
-5. Finaliza com `github_submit_pr_review` (approve, request changes ou comment)
-
-### Dashboard
-
-O widget **GitHub Status** no dashboard mostra contadores de PRs abertos, issues e último sync.
-
-### Detail Tab
-
-Dentro de qualquer card do Paperclip, a aba **GitHub** mostra PRs vinculados àquele card com status e links diretos para o GitHub.
+MIT
