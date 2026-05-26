@@ -154,6 +154,9 @@ const plugin = definePlugin({
         originId: `${repoFullName}#${prNumber}`,
       });
 
+      // Link the PR to the new Paperclip issue
+      await linkPRToCard(ctx.db, prId as number, issue.id, "manual");
+
       return { ok: true, issueId: issue.id };
     });
 
