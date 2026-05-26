@@ -152,6 +152,42 @@ export function GitHubSettingsPage() {
           {loading ? "Sincronizando..." : "Sync Completo"}
         </button>
       </div>
+
+      <div style={cardStyle}>
+        <h3 style={{ margin: "0 0 8px", fontSize: "14px" }}>Webhook (Review Automático)</h3>
+        <p style={{ margin: "0 0 8px", fontSize: "12px", opacity: 0.7 }}>
+          Configure um webhook no GitHub para que o plugin crie automaticamente uma issue de code review quando um PR for aberto.
+        </p>
+        <div style={{ background: "rgba(128,128,128,0.08)", borderRadius: "6px", padding: "12px", fontSize: "12px", fontFamily: "monospace" }}>
+          <div style={{ marginBottom: "12px" }}>
+            <strong style={{ fontSize: "11px", opacity: 0.6, display: "block", marginBottom: "4px" }}>Payload URL</strong>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <code style={{ flex: 1, wordBreak: "break-all" }}>
+                {typeof window !== "undefined" ? `${window.location.origin}/plugins/cus.github-manager/webhooks/github-events` : "<your-host>/plugins/cus.github-manager/webhooks/github-events"}
+              </code>
+              <button
+                type="button"
+                style={{ ...buttonStyle, fontSize: "11px", padding: "4px 8px" }}
+                onClick={() => {
+                  const url = `${window.location.origin}/plugins/cus.github-manager/webhooks/github-events`;
+                  navigator.clipboard.writeText(url).then(() => setStatus("URL copiada!"));
+                }}
+              >
+                Copiar
+              </button>
+            </div>
+          </div>
+          <div style={{ marginBottom: "8px" }}>
+            <strong style={{ fontSize: "11px", opacity: 0.6 }}>Content type:</strong> application/json
+          </div>
+          <div style={{ marginBottom: "8px" }}>
+            <strong style={{ fontSize: "11px", opacity: 0.6 }}>Events:</strong> Pull requests, Issues
+          </div>
+        </div>
+        <p style={{ margin: "8px 0 0", fontSize: "11px", opacity: 0.5 }}>
+          No GitHub: Settings → Webhooks → Add webhook → cole a URL acima → selecione "Let me select individual events" → marque "Pull requests" e "Issues".
+        </p>
+      </div>
     </div>
   );
 }
