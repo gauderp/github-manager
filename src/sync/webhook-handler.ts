@@ -1,12 +1,30 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PluginContext, PluginWebhookInput } from "@paperclipai/plugin-sdk";
 import { upsertRepo, upsertPR, upsertIssue, linkPRToCard } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
+function verifyWebhookSignature(rawBody: string, signature: string, secret: string): boolean {
+  const expected = "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
+  if (expected.length !== signature.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
 export async function handleGithubWebhook(
   ctx: PluginContext,
   input: PluginWebhookInput,
 ): Promise<void> {
+  // Validate webhook secret if configured
+  const config = await ctx.config.get();
+  const webhookSecret = config?.webhookSecret as string | undefined;
+  if (webhookSecret) {
+    const signature = input.headers["x-hub-signature-256"] as string;
+    if (!signature || !verifyWebhookSignature(input.rawBody, signature, webhookSecret)) {
+      ctx.logger.warn("Webhook signature verification failed — rejecting");
+      return;
+    }
+  }
+
   const event = input.headers["x-github-event"];
   const payload = input.parsedBody as Record<string, unknown>;
 

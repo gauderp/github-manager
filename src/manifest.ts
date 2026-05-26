@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "2.0.2",
+  version: "2.1.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -57,6 +57,11 @@ const manifest: PaperclipPluginManifestV1 = {
         default: 5,
         minimum: 1,
         maximum: 1440,
+      },
+      webhookSecret: {
+        type: "string",
+        title: "Webhook Secret",
+        description: "Opcional. Cole o mesmo secret configurado no GitHub webhook para validar autenticidade dos eventos.",
       },
       webhookInfo: {
         type: "string",
