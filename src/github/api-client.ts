@@ -26,6 +26,7 @@ export async function githubFetch(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: options.accept ?? "application/vnd.github+json",
+    "User-Agent": "paperclip-github-manager/1.0",
     "X-GitHub-Api-Version": "2022-11-28",
   };
 
