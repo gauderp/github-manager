@@ -9,6 +9,7 @@ swap_size_mb = 512
   PORT = "3100"
   NODE_OPTIONS = "--max-old-space-size=512"
   HEARTBEAT_SCHEDULER_INTERVAL_MS = "86400000"
+  PAPERCLIP_AUTH_DISABLE_SIGN_UP = "true"
 
 [http_service]
   internal_port = 3100
