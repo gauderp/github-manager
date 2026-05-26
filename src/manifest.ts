@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "1.1.0",
+  version: "1.2.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -32,7 +32,34 @@ const manifest: PaperclipPluginManifestV1 = {
     "ui.sidebar.register",
     "ui.detailTab.register",
     "ui.action.register",
+    "instance.settings.register",
   ],
+
+  instanceConfigSchema: {
+    type: "object",
+    required: ["githubToken"],
+    properties: {
+      githubToken: {
+        type: "string",
+        title: "GitHub Personal Access Token",
+        description: "PAT with 'repo' and 'read:org' permissions",
+        format: "secret-ref",
+      },
+      defaultOrg: {
+        type: "string",
+        title: "Default Organization",
+        description: "GitHub organization to sync repositories from (optional)",
+      },
+      syncIntervalMinutes: {
+        type: "number",
+        title: "Sync Interval (minutes)",
+        description: "How often to sync PRs and issues (default: 5)",
+        default: 5,
+        minimum: 1,
+        maximum: 1440,
+      },
+    },
+  },
 
   entrypoints: {
     worker: "./dist/worker.js",
