@@ -17,8 +17,6 @@ export function GitHubPullRequestsPage() {
     filters: stateFilter ? { state: stateFilter } : undefined,
   });
 
-  const agentsData = usePluginData<{ agents: Array<{ id: string; displayName: string }> }>("available-agents", { companyId });
-
   const syncAction = usePluginAction("sync-all");
   const requestReview = usePluginAction("request-review");
   const runQuickCheck = usePluginAction("run-quick-check");
@@ -29,9 +27,7 @@ export function GitHubPullRequestsPage() {
     !search || pr.title.toLowerCase().includes(search.toLowerCase()) || pr.repoFullName.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const agents = agentsData.data?.agents ?? [];
-
-  const handleRequestReview = async (pr: PRWithRepo, agentId: string) => {
+  const handleRequestReview = async (pr: PRWithRepo) => {
     setReviewingPR(pr.id);
     setReviewStatus((s) => ({ ...s, [pr.id]: "Solicitando review..." }));
     try {
@@ -40,7 +36,6 @@ export function GitHubPullRequestsPage() {
         prId: pr.id,
         repoFullName: pr.repoFullName,
         prNumber: pr.number,
-        agentId,
       });
       setReviewStatus((s) => ({ ...s, [pr.id]: "Review solicitada!" }));
     } catch (err) {
@@ -141,29 +136,17 @@ export function GitHubPullRequestsPage() {
                 >
                   Quick Check
                 </button>
-                {agents.length > 0 ? (
-                  <select
-                    style={{
-                      ...primaryButtonStyle,
-                      cursor: isReviewing ? "wait" : "pointer",
-                      opacity: isReviewing ? 0.6 : 1,
-                    }}
-                    disabled={isReviewing}
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value) handleRequestReview(pr, e.target.value);
-                    }}
-                  >
-                    <option value="" disabled>Agent Review</option>
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>{agent.displayName}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <button type="button" style={primaryButtonStyle} disabled title="Nenhum agente disponível">
-                    Agent Review
-                  </button>
-                )}
+                <button
+                  type="button"
+                  style={{
+                    ...primaryButtonStyle,
+                    opacity: isReviewing ? 0.6 : 1,
+                  }}
+                  disabled={isReviewing}
+                  onClick={() => handleRequestReview(pr)}
+                >
+                  {isReviewing ? "Solicitando..." : "Agent Review"}
+                </button>
               </div>
             </div>
             {status && (

@@ -74,10 +74,6 @@ const plugin = definePlugin({
       return await generateCodeGraph(ctx, companyId as string, repoFullName as string);
     });
 
-    ctx.data.register("available-agents", async ({ companyId }) => {
-      const agents = await ctx.agents.list({ companyId: companyId as string });
-      return { agents };
-    });
 
     // ── Action handlers (UI writes) ──
 
@@ -136,17 +132,20 @@ const plugin = definePlugin({
       return { ok: true };
     });
 
-    ctx.actions.register("request-review", async ({ companyId, prId, repoFullName, prNumber, agentId }) => {
+    ctx.actions.register("request-review", async ({ companyId, prId, repoFullName, prNumber }) => {
       const repo = await getRepoByFullName(ctx.db, repoFullName as string);
       if (!repo) throw new Error(`Repo ${repoFullName} not found`);
 
       const [owner, repoName] = (repoFullName as string).split("/");
 
+      // Use the managed github-reviewer agent
+      const agent = await ctx.agents.managed.get("github-reviewer", companyId as string);
+
       await ctx.agents.invoke(
-        agentId as string,
+        agent.agentId,
         companyId as string,
         {
-          prompt: `Please review PR #${prNumber} in ${repoFullName}. Use the github_get_pull_request_diff tool with owner="${owner}", repo="${repoName}", pull_number=${prNumber} to get the diff, then provide a thorough code review. Post your findings as inline comments using github_create_review_comment and submit your final verdict using github_submit_pr_review.`,
+          prompt: `Review PR #${prNumber} in ${repoFullName}.\n\n1. Use github_get_repo_structure with repo_full_name="${repoFullName}" to understand the codebase\n2. Use github_get_pull_request_diff with owner="${owner}", repo="${repoName}", pull_number=${prNumber} to get the diff\n3. Read relevant files with github_read_file_content for context\n4. Post inline comments with github_create_review_comment\n5. Submit your verdict with github_submit_pr_review`,
         },
       );
 
