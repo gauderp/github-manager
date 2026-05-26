@@ -44,15 +44,18 @@ paperclipai plugin install @gaud_erp/paperclip-github-manager
 - `repo` — full access to private repositories
 - `read:org` — list organization repositories
 
-### Webhook (optional)
+### Webhook (automated PR review)
 
-Set up a GitHub webhook pointing to:
+Configure a GitHub webhook to automatically create code review issues when PRs are opened:
 
-```
-https://<your-paperclip-host>/plugins/cus.github-manager/webhooks/github-events
-```
+1. Go to your GitHub org/repo **Settings → Webhooks → Add webhook**
+2. **Payload URL**: `https://<your-paperclip-host>/api/plugins/cus.github-manager/webhooks/github-events`
+3. **Content type**: `application/json`
+4. **Secret**: generate one (`openssl rand -hex 32`), paste in GitHub and in the plugin's **Webhook Secret** field
+5. **Events**: select "Let me select individual events" → check **Pull requests** and **Issues**
+6. Click **Add webhook**
 
-Events: `pull_request`, `issues`
+The webhook URL is also shown in **Settings → Plugins → GitHub Manager → Webhook URL**.
 
 ## Agent Tools
 
