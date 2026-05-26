@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useHostContext, usePluginAction } from "@paperclipai/plugin-sdk/ui";
 import { layoutStack, cardStyle, buttonStyle, primaryButtonStyle } from "./shared.js";
+import { GitHubNavBar } from "./NavBar.js";
 import type { GraphData } from "../../graphify/graph-generator.js";
 
 function toObsidianCanvas(graph: GraphData): string {
@@ -128,6 +129,7 @@ export function GitHubGraphsPage() {
 
   return (
     <div style={layoutStack}>
+      <GitHubNavBar />
       <h2 style={{ margin: 0, fontSize: "18px" }}>Knowledge Graphs</h2>
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>

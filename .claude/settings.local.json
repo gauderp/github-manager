@@ -20,7 +20,8 @@
       "Bash(flyctl machine:*)",
       "Bash(flyctl ssh:*)",
       "WebFetch(domain:docs.paperclip.dev)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git rm:*)"
     ]
   }
 }

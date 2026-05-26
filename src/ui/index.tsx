@@ -1,5 +1,6 @@
-// Sidebar
+// Sidebar & Navigation
 export { GitHubSidebarLink, GitHubSidebarPanel, GitHubRouteSidebar } from "./components/Sidebar.js";
+export { GitHubNavBar } from "./components/NavBar.js";
 
 // Pages
 export { GitHubSettingsPage } from "./components/SettingsPage.js";

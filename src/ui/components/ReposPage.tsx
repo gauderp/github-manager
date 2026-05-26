@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useHostContext, useHostNavigation, usePluginData, usePluginAction } from "@paperclipai/plugin-sdk/ui";
 import { layoutStack, cardStyle, buttonStyle, primaryButtonStyle, timeAgo, PATHS } from "./shared.js";
+import { GitHubNavBar } from "./NavBar.js";
 import type { GitHubRepo } from "../../types.js";
 
 export function GitHubReposPage() {
@@ -22,6 +23,7 @@ export function GitHubReposPage() {
 
   return (
     <div style={layoutStack}>
+      <GitHubNavBar />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: "18px" }}>Repositórios ({repos.length})</h2>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useHostContext, usePluginData, usePluginAction } from "@paperclipai/plugin-sdk/ui";
 import { layoutStack, cardStyle, buttonStyle, primaryButtonStyle, badgeStyle, prStateBadge, timeAgo } from "./shared.js";
+import { GitHubNavBar } from "./NavBar.js";
 import type { PRWithRepo } from "../../types.js";
 
 export function GitHubPullRequestsPage() {
@@ -74,6 +75,7 @@ export function GitHubPullRequestsPage() {
 
   return (
     <div style={layoutStack}>
+      <GitHubNavBar />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: "18px" }}>Pull Requests ({prs.length})</h2>
         <button type="button" style={buttonStyle} onClick={() => syncAction({ companyId }).catch(console.error)}>
