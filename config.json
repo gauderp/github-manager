@@ -6,7 +6,10 @@
   },
   "database": {
     "mode": "postgres",
-    "connectionString": "postgresql://postgres.dnarqdmbmnjbcingpuaz:713GdXQerUv2yr4PJL8vttruBhqGqwhg6@aws-1-sa-east-1.pooler.supabase.com:6543/postgres"
+    "connectionString": "postgresql://postgres.budpqjhkjrovavvmbrxq:PaperclipGaud2026!@aws-1-sa-east-1.pooler.supabase.com:6543/postgres?options=-c%20statement_timeout%3D60000",
+    "backup": {
+      "enabled": false
+    }
   },
   "logging": {
     "mode": "file",

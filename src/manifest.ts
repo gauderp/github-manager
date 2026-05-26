@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "1.4.0",
+  version: "1.5.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -165,6 +165,19 @@ const manifest: PaperclipPluginManifestV1 = {
           query: { type: "string" },
         },
         required: ["query"],
+      },
+    },
+    {
+      name: "github_get_repo_structure",
+      displayName: "Get Repo Structure",
+      description: "Get the cached directory/file structure of a repository. Use this FIRST before reading files to understand the codebase layout and save tokens. Set refresh=true to regenerate from GitHub.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          repo_full_name: { type: "string", description: "owner/repo format" },
+          refresh: { type: "boolean", description: "Set true to regenerate the structure from GitHub (use when cache is stale)" },
+        },
+        required: ["repo_full_name"],
       },
     },
   ],

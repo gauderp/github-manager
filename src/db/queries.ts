@@ -238,3 +238,24 @@ export async function getLastSyncTime(db: DB): Promise<string | null> {
   );
   return rows.length > 0 ? (rows[0].finished_at as string) : null;
 }
+
+// ── Graph Cache ──
+
+export async function saveRepoGraph(db: DB, repoId: number, graphJson: string): Promise<void> {
+  await db.execute(
+    `UPDATE ${S}.gh_repositories SET graph_json=$1, graph_generated_at=$2 WHERE id=$3`,
+    [graphJson, new Date().toISOString(), repoId],
+  );
+}
+
+export async function getRepoGraph(db: DB, fullName: string): Promise<{ graphJson: string; generatedAt: string } | null> {
+  const rows = await db.query(
+    `SELECT graph_json, graph_generated_at FROM ${S}.gh_repositories WHERE full_name = $1 AND graph_json IS NOT NULL`,
+    [fullName],
+  );
+  if (rows.length === 0) return null;
+  return {
+    graphJson: rows[0].graph_json as string,
+    generatedAt: rows[0].graph_generated_at as string,
+  };
+}

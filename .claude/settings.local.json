@@ -7,16 +7,20 @@
       "Bash(fly status:*)",
       "Bash(MSYS_NO_PATHCONV=1 rtk docker:*)",
       "Bash(fly certs:*)",
-      "Bash(rtk grep:*)",
-      "Bash(npm info:*)",
-      "Bash(rtk find:*)",
+      "Bash(paperclipai configure:*)",
+      "Bash(npm root:*)",
+      "Bash(flyctl logs:*)",
+      "Bash(flyctl status:*)",
       "Bash(rtk read:*)",
-      "Bash(npm search:*)",
-      "WebFetch(domain:docs.paperclip.ing)",
-      "WebFetch(domain:api.github.com)",
-      "Bash(rtk git:*)",
-      "Bash(rtk vitest:*)",
-      "Bash(rtk tsc:*)"
+      "Bash(supabase --version)",
+      "Bash(supabase orgs:*)",
+      "Bash(supabase projects:*)",
+      "Bash(flyctl apps:*)",
+      "Bash(flyctl certs:*)",
+      "Bash(flyctl machine:*)",
+      "Bash(flyctl ssh:*)",
+      "WebFetch(domain:docs.paperclip.dev)",
+      "Bash(node:*)"
     ]
   }
 }

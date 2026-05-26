@@ -1,5 +1,6 @@
 import type { PluginContext, ToolRunContext, ToolResult } from "@paperclipai/plugin-sdk";
 import { githubFetch } from "../github/api-client.js";
+import { getRepoGraph, saveRepoGraph, getRepoByFullName } from "../db/queries.js";
 
 const MAX_DIFF_CHARS = 120_000;
 const MAX_FILE_CHARS = 128_000;
@@ -211,6 +212,67 @@ export function registerReviewTools(ctx: PluginContext): void {
       }));
 
       return { content: items.map((i) => `#${i.number} ${i.title} [${i.state}]`).join("\n"), data: { items } };
+    },
+  );
+
+  ctx.tools.register(
+    "github_get_repo_structure",
+    {
+      displayName: "Get Repo Structure",
+      description: "Get the cached directory and file structure of a repository. Call this FIRST before reading files to understand codebase layout.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          repo_full_name: { type: "string", description: "Repository in owner/repo format" },
+        },
+        required: ["repo_full_name"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { repo_full_name, refresh } = params as { repo_full_name: string; refresh?: boolean };
+      const companyId = runCtx.companyId;
+
+      // If refresh requested or no cache, regenerate
+      if (refresh && companyId) {
+        const repo = await getRepoByFullName(ctx.db, repo_full_name);
+        if (repo) {
+          const { data: treeData } = await githubFetch(
+            ctx, companyId,
+            `/repos/${repo_full_name}/git/trees/${repo.defaultBranch}?recursive=1`,
+          );
+          const tree = (treeData as Record<string, unknown>).tree as Array<Record<string, unknown>>;
+          const dirs: string[] = [];
+          const files: string[] = [];
+          for (const entry of tree) {
+            const p = entry.path as string;
+            if (entry.type === "tree" && p.split("/").length <= 3) dirs.push(p);
+            else if (entry.type === "blob" && (p.split("/").length <= 2 || /\.(ts|js|py|go|rs|java|json|ya?ml|toml|md)$/.test(p))) files.push(p);
+          }
+          const graph = { dirs, files, defaultBranch: repo.defaultBranch, language: repo.language };
+          await saveRepoGraph(ctx.db, repo.id, JSON.stringify(graph));
+        }
+      }
+
+      const cached = await getRepoGraph(ctx.db, repo_full_name);
+      if (!cached) {
+        return { content: `No cached structure for ${repo_full_name}. Run a full sync first or call with refresh=true.` };
+      }
+
+      const graph = JSON.parse(cached.graphJson) as { dirs: string[]; files: string[]; defaultBranch: string; language: string | null };
+      const summary = [
+        `Repository: ${repo_full_name}`,
+        `Language: ${graph.language ?? "unknown"}`,
+        `Default branch: ${graph.defaultBranch}`,
+        `Generated: ${cached.generatedAt}`,
+        ``,
+        `Directories (${graph.dirs.length}):`,
+        ...graph.dirs.map((d) => `  ${d}/`),
+        ``,
+        `Key files (${graph.files.length}):`,
+        ...graph.files.map((f) => `  ${f}`),
+      ].join("\n");
+
+      return { content: summary, data: graph };
     },
   );
 }

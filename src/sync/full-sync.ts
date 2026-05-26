@@ -2,7 +2,7 @@ import type { PluginContext } from "@paperclipai/plugin-sdk";
 import { githubFetch } from "../github/api-client.js";
 import {
   upsertRepo, listRepos, upsertPR, upsertIssue,
-  createSyncLog, completeSyncLog,
+  createSyncLog, completeSyncLog, saveRepoGraph,
 } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubRepo, GitHubPR, GitHubIssue } from "../types.js";
@@ -135,6 +135,26 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
         };
         await upsertIssue(ctx.db, issue);
         issuesSynced++;
+      }
+
+      // Generate compact graph for agent context
+      try {
+        const { data: treeData } = await githubFetch(
+          ctx, companyId,
+          `/repos/${repo.fullName}/git/trees/${repo.defaultBranch}?recursive=1`,
+        );
+        const tree = (treeData as Record<string, unknown>).tree as Array<Record<string, unknown>>;
+        const dirs: string[] = [];
+        const files: string[] = [];
+        for (const entry of tree) {
+          const p = entry.path as string;
+          if (entry.type === "tree" && p.split("/").length <= 3) dirs.push(p);
+          else if (entry.type === "blob" && (p.split("/").length <= 2 || /\.(ts|js|py|go|rs|java|json|ya?ml|toml|md)$/.test(p))) files.push(p);
+        }
+        const graph = { dirs, files, defaultBranch: repo.defaultBranch, language: repo.language };
+        await saveRepoGraph(ctx.db, repo.id, JSON.stringify(graph));
+      } catch (graphErr) {
+        ctx.logger.warn(`Graph generation failed for ${repo.fullName}: ${graphErr}`);
       }
 
       reposSynced++;
