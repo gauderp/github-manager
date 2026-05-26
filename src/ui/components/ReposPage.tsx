@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useHostContext, usePluginData, usePluginAction } from "@paperclipai/plugin-sdk/ui";
-import { layoutStack, cardStyle, buttonStyle, primaryButtonStyle, timeAgo } from "./shared.js";
+import { useHostContext, useHostNavigation, usePluginData, usePluginAction } from "@paperclipai/plugin-sdk/ui";
+import { layoutStack, cardStyle, buttonStyle, primaryButtonStyle, timeAgo, PATHS } from "./shared.js";
 import type { GitHubRepo } from "../../types.js";
 
 export function GitHubReposPage() {
@@ -8,9 +8,11 @@ export function GitHubReposPage() {
   const companyId = context.companyId;
   const [filter, setFilter] = useState("");
 
+  const nav = useHostNavigation();
   const reposData = usePluginData<{ repos: GitHubRepo[]; lastSync: string | null }>("repos", { companyId });
   const syncAction = usePluginAction("sync-all");
   const generateGraph = usePluginAction("generate-graph");
+  const [graphLoading, setGraphLoading] = useState<string | null>(null);
 
   if (!companyId) return <div style={layoutStack}>Selecione uma empresa.</div>;
 
@@ -63,10 +65,21 @@ export function GitHubReposPage() {
               <button
                 type="button"
                 style={buttonStyle}
-                onClick={() => generateGraph({ companyId, repoFullName: repo.fullName, level: "code" }).catch(console.error)}
+                disabled={graphLoading === repo.fullName}
+                onClick={async () => {
+                  setGraphLoading(repo.fullName);
+                  try {
+                    await generateGraph({ companyId, repoFullName: repo.fullName, level: "code" });
+                    nav.navigate(PATHS.graphs);
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setGraphLoading(null);
+                  }
+                }}
                 title="Gerar Knowledge Graph"
               >
-                Graphify
+                {graphLoading === repo.fullName ? "Gerando..." : "Graphify"}
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 {
   "name": "@gaud_erp/paperclip-github-manager",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Paperclip plugin for GitHub repos, PR/issue sync, card integration, agent review, and graphify",
   "license": "MIT",
   "repository": {
