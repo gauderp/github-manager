@@ -8,8 +8,61 @@ import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubRepo, GitHubPR, GitHubIssue } from "../types.js";
 
 export async function runFullSync(ctx: PluginContext, companyId: string): Promise<void> {
-  const repos = await listRepos(ctx.db);
-  if (repos.length === 0) return;
+  // Discover repos from org if none are tracked yet
+  let repos = await listRepos(ctx.db);
+  if (repos.length === 0) {
+    const config = await ctx.config.get();
+    const org = config?.defaultOrg as string | undefined;
+    if (org) {
+      ctx.logger.info(`No repos tracked, discovering from org: ${org}`);
+      let page = 1;
+      let hasMore = true;
+      while (hasMore) {
+        const { data } = await githubFetch(ctx, companyId, `/orgs/${org}/repos?per_page=100&page=${page}`);
+        const items = data as Array<Record<string, unknown>>;
+        for (const rd of items) {
+          await upsertRepo(ctx.db, {
+            id: rd.id as number,
+            fullName: rd.full_name as string,
+            owner: (rd.owner as Record<string, unknown>).login as string,
+            name: rd.name as string,
+            private: rd.private as boolean,
+            defaultBranch: rd.default_branch as string,
+            htmlUrl: rd.html_url as string,
+            description: rd.description as string | null,
+            language: rd.language as string | null,
+            topics: (rd.topics as string[]) ?? [],
+            updatedAt: rd.updated_at as string,
+          });
+        }
+        hasMore = items.length === 100;
+        page++;
+      }
+      repos = await listRepos(ctx.db);
+    } else {
+      // Try user repos as fallback
+      ctx.logger.info("No repos tracked and no defaultOrg, discovering user repos");
+      const { data } = await githubFetch(ctx, companyId, "/user/repos?per_page=100&sort=updated");
+      const items = data as Array<Record<string, unknown>>;
+      for (const rd of items) {
+        await upsertRepo(ctx.db, {
+          id: rd.id as number,
+          fullName: rd.full_name as string,
+          owner: (rd.owner as Record<string, unknown>).login as string,
+          name: rd.name as string,
+          private: rd.private as boolean,
+          defaultBranch: rd.default_branch as string,
+          htmlUrl: rd.html_url as string,
+          description: rd.description as string | null,
+          language: rd.language as string | null,
+          topics: (rd.topics as string[]) ?? [],
+          updatedAt: rd.updated_at as string,
+        });
+      }
+      repos = await listRepos(ctx.db);
+    }
+    if (repos.length === 0) return;
+  }
 
   const logId = await createSyncLog(ctx.db, "full");
   let reposSynced = 0;
