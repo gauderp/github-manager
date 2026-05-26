@@ -9,7 +9,7 @@ export function GitHubReposPage() {
   const [filter, setFilter] = useState("");
 
   const reposData = usePluginData<{ repos: GitHubRepo[]; lastSync: string | null }>("repos", { companyId });
-  const syncAction = usePluginAction("sync-incremental");
+  const syncAction = usePluginAction("sync-all");
   const generateGraph = usePluginAction("generate-graph");
 
   if (!companyId) return <div style={layoutStack}>Selecione uma empresa.</div>;
