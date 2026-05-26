@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "1.2.3",
+  version: "1.3.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
