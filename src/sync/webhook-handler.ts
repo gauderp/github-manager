@@ -1,5 +1,5 @@
 import type { PluginContext, PluginWebhookInput } from "@paperclipai/plugin-sdk";
-import { upsertRepo, upsertPR, upsertIssue } from "../db/queries.js";
+import { upsertRepo, upsertPR, upsertIssue, linkPRToCard } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
@@ -70,6 +70,49 @@ async function handlePullRequestEvent(
   await upsertPR(ctx.db, pr);
   await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
   ctx.logger.info(`Webhook: upserted PR #${pr.number} from ${repoData.full_name}`);
+
+  // Auto-create review issue when PR is opened or ready for review
+  const action = payload.action as string;
+  if (action === "opened" || action === "ready_for_review") {
+    if (pr.draft) return; // Skip drafts
+
+    const repoFullName = repoData.full_name as string;
+    const [owner, repoName] = repoFullName.split("/");
+
+    try {
+      // Get companyId from first company (single-tenant assumption)
+      const companies = await ctx.companies.list();
+      if (companies.length === 0) return;
+      const companyId = companies[0].id;
+
+      const issue = await ctx.issues.create({
+        companyId,
+        title: `Code Review: ${repoFullName}#${pr.number}`,
+        description: [
+          `Automated review for PR #${pr.number}: **${pr.title}** by @${pr.author}`,
+          ``,
+          `## Review Tasks`,
+          `1. Use \`github_get_repo_structure\` with repo_full_name="${repoFullName}" to understand the codebase`,
+          `2. Use \`github_get_pull_request_diff\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to get the diff`,
+          `3. Use \`github_get_pr_checks\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to verify CI/CD status`,
+          `4. Use \`github_get_pr_comments\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to check existing review comments`,
+          `5. Read relevant files with \`github_read_file_content\` for context`,
+          `6. Post inline comments with \`github_create_review_comment\` for issues found`,
+          `7. If changes are needed, submit review with \`github_submit_pr_review\` event="REQUEST_CHANGES" and tag @${pr.author}`,
+          `8. If everything looks good, submit with event="APPROVE"`,
+          ``,
+          `PR: https://github.com/${repoFullName}/pull/${pr.number}`,
+        ].join("\n"),
+        originKind: "plugin_github_review",
+        originId: `${repoFullName}#${pr.number}`,
+      });
+
+      await linkPRToCard(ctx.db, pr.id, issue.id, "webhook");
+      ctx.logger.info(`Webhook: auto-created review issue for PR #${pr.number}`);
+    } catch (err) {
+      ctx.logger.error(`Webhook: failed to create review issue for PR #${pr.number}: ${err}`);
+    }
+  }
 }
 
 async function handleIssuesEvent(

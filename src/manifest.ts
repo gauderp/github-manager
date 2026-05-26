@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "1.9.1",
+  version: "2.0.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -170,6 +170,34 @@ const manifest: PaperclipPluginManifestV1 = {
       },
     },
     {
+      name: "github_get_pr_checks",
+      displayName: "Get PR CI/CD Status",
+      description: "Get CI/CD check runs status for a pull request (pass/fail/pending)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
+      name: "github_get_pr_comments",
+      displayName: "Get PR Review Comments",
+      description: "Get all review comments, discussions, and review verdicts on a pull request",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
       name: "github_get_repo_structure",
       displayName: "Get Repo Structure",
       description: "Get the cached directory/file structure of a repository. Use this FIRST before reading files to understand the codebase layout and save tokens. Set refresh=true to regenerate from GitHub.",
@@ -244,47 +272,37 @@ You have access to GitHub repositories through the GitHub Manager plugin tools. 
 
 ## Available Tools
 
-### 1. github_get_repo_structure
-Get the directory and file structure of a repository. **Always call this FIRST** before reading any files.
+### Codebase Navigation
+- **github_get_repo_structure** — Get directory/file structure. **Call FIRST** before reading files. Params: \`repo_full_name\`, optional \`refresh=true\`
+- **github_read_file_content** — Read a file. Params: \`owner\`, \`repo\`, \`path\`, optional \`ref\`
+- **github_list_repositories** — List all tracked repos (no params)
+- **github_search_issues** — Search issues/PRs. Params: \`query\`
 
-Parameters:
-- \`repo_full_name\` (required): Repository in "owner/repo" format
-- \`refresh\` (optional): Set to true to regenerate from GitHub if cache is stale
+### PR Review
+- **github_get_pull_request_diff** — Get unified diff. Params: \`owner\`, \`repo\`, \`pull_number\`
+- **github_get_pr_checks** — Get CI/CD status (pass/fail/pending). Params: \`owner\`, \`repo\`, \`pull_number\`
+- **github_get_pr_comments** — Get all review comments, discussions, and verdicts. Params: \`owner\`, \`repo\`, \`pull_number\`
+- **github_create_review_comment** — Post inline comment. Params: \`owner\`, \`repo\`, \`pull_number\`, \`commit_id\`, \`path\`, \`line\`, \`body\`
+- **github_submit_pr_review** — Submit verdict. Params: \`owner\`, \`repo\`, \`pull_number\`, \`event\` (APPROVE/REQUEST_CHANGES/COMMENT), \`body\`
 
-### 2. github_read_file_content
-Read the content of a specific file from a GitHub repository.
+## PR Review Workflow
 
-Parameters:
-- \`owner\` (required): Repository owner (e.g. "gauderp")
-- \`repo\` (required): Repository name (e.g. "gaud-erp-api")
-- \`path\` (required): File path (e.g. "src/main/java/com/gaud/App.java")
-- \`ref\` (optional): Branch or commit SHA (defaults to main branch)
+When reviewing a PR:
+1. \`github_get_repo_structure\` — understand the codebase
+2. \`github_get_pull_request_diff\` — see what changed
+3. \`github_get_pr_checks\` — verify CI/CD passed
+4. \`github_get_pr_comments\` — check existing reviews from others
+5. \`github_read_file_content\` — read surrounding code for context
+6. \`github_create_review_comment\` — post inline comments on issues
+7. \`github_submit_pr_review\` — approve or request changes with summary
+8. If CI failed or changes needed, tag the PR author to fix
 
-### 3. github_get_pull_request_diff
-Get the unified diff of a pull request for code review.
+## Codebase Exploration Workflow
 
-Parameters:
-- \`owner\`, \`repo\`, \`pull_number\`
-
-### 4. github_search_issues
-Search GitHub issues and PRs using GitHub search syntax.
-
-Parameters:
-- \`query\`: GitHub search query (e.g. "is:open label:bug")
-
-### 5. github_list_repositories
-List all tracked GitHub repositories (no parameters needed).
-
-## Mandatory Workflow
-
-1. **ALWAYS** start with \`github_get_repo_structure\` to understand the codebase layout
-2. Read only the files you actually need with \`github_read_file_content\`
-3. If the structure seems outdated, call \`github_get_repo_structure\` with \`refresh=true\`
-4. Never try to access the local filesystem for source code — always use these tools
-
-## Token Efficiency
-The structure cache returns directories and key files in a single call (~5-50KB).
-This replaces hundreds of file-listing API calls, saving 60-90% of tokens.
+1. **ALWAYS** start with \`github_get_repo_structure\` to understand layout
+2. Read only the files you need with \`github_read_file_content\`
+3. If structure seems outdated, call with \`refresh=true\`
+4. Never access the local filesystem — always use these tools
 `,
     },
   ],

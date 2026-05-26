@@ -275,4 +275,137 @@ export function registerReviewTools(ctx: PluginContext): void {
       return { content: summary, data: graph };
     },
   );
+
+  ctx.tools.register(
+    "github_get_pr_checks",
+    {
+      displayName: "Get PR CI/CD Status",
+      description: "Get the CI/CD check runs status for a pull request (GitHub Actions, etc)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { owner, repo, pull_number } = params as { owner: string; repo: string; pull_number: number };
+      const companyId = runCtx.companyId;
+      if (!companyId) return { error: "No company context" };
+
+      // Get PR to find head SHA
+      const { data: prData } = await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/pulls/${pull_number}`);
+      const headSha = ((prData as Record<string, unknown>).head as Record<string, unknown>).sha as string;
+
+      // Get check runs for that commit
+      const { data } = await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/commits/${headSha}/check-runs`);
+      const result = data as Record<string, unknown>;
+      const checkRuns = (result.check_runs as Array<Record<string, unknown>>) ?? [];
+
+      const summary = checkRuns.map((cr) => {
+        const status = cr.status as string;
+        const conclusion = cr.conclusion as string | null;
+        const icon = conclusion === "success" ? "PASS" : conclusion === "failure" ? "FAIL" : status === "in_progress" ? "RUNNING" : "PENDING";
+        return `[${icon}] ${cr.name} — ${conclusion ?? status}`;
+      });
+
+      const allPassed = checkRuns.length > 0 && checkRuns.every((cr) => cr.conclusion === "success");
+      const hasFailed = checkRuns.some((cr) => cr.conclusion === "failure");
+
+      return {
+        content: [
+          `CI/CD Status for PR #${pull_number} (${headSha.slice(0, 7)}):`,
+          `Total checks: ${checkRuns.length}`,
+          allPassed ? "All checks passed!" : hasFailed ? "Some checks FAILED" : "Checks pending...",
+          "",
+          ...summary,
+        ].join("\n"),
+        data: { checkRuns: checkRuns.map((cr) => ({ name: cr.name, status: cr.status, conclusion: cr.conclusion })), allPassed, hasFailed },
+      };
+    },
+  );
+
+  ctx.tools.register(
+    "github_get_pr_comments",
+    {
+      displayName: "Get PR Review Comments",
+      description: "Get all review comments and issue comments on a pull request from other reviewers",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { owner, repo, pull_number } = params as { owner: string; repo: string; pull_number: number };
+      const companyId = runCtx.companyId;
+      if (!companyId) return { error: "No company context" };
+
+      // Get review comments (inline on code)
+      const { data: reviewComments } = await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/pulls/${pull_number}/comments?per_page=100`);
+      const rcs = (reviewComments as Array<Record<string, unknown>>).map((c) => ({
+        author: (c.user as Record<string, unknown>).login as string,
+        path: c.path as string,
+        line: c.line as number | null,
+        body: c.body as string,
+        createdAt: c.created_at as string,
+      }));
+
+      // Get issue comments (general discussion)
+      const { data: issueComments } = await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/issues/${pull_number}/comments?per_page=100`);
+      const ics = (issueComments as Array<Record<string, unknown>>).map((c) => ({
+        author: (c.user as Record<string, unknown>).login as string,
+        body: c.body as string,
+        createdAt: c.created_at as string,
+      }));
+
+      // Get reviews (approve/request changes)
+      const { data: reviews } = await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/pulls/${pull_number}/reviews?per_page=100`);
+      const rvs = (reviews as Array<Record<string, unknown>>).map((r) => ({
+        author: (r.user as Record<string, unknown>).login as string,
+        state: r.state as string,
+        body: r.body as string | null,
+        submittedAt: r.submitted_at as string,
+      }));
+
+      const lines: string[] = [`PR #${pull_number} — Review Activity:`];
+
+      if (rvs.length > 0) {
+        lines.push("", "## Reviews:");
+        for (const r of rvs) {
+          lines.push(`- @${r.author}: ${r.state}${r.body ? ` — "${r.body}"` : ""}`);
+        }
+      }
+
+      if (rcs.length > 0) {
+        lines.push("", `## Inline Comments (${rcs.length}):`);
+        for (const c of rcs) {
+          lines.push(`- @${c.author} on ${c.path}${c.line ? `:${c.line}` : ""}: ${c.body.slice(0, 200)}`);
+        }
+      }
+
+      if (ics.length > 0) {
+        lines.push("", `## Discussion Comments (${ics.length}):`);
+        for (const c of ics) {
+          lines.push(`- @${c.author}: ${c.body.slice(0, 200)}`);
+        }
+      }
+
+      if (rvs.length === 0 && rcs.length === 0 && ics.length === 0) {
+        lines.push("", "No reviews or comments yet.");
+      }
+
+      return {
+        content: lines.join("\n"),
+        data: { reviews: rvs, reviewComments: rcs, issueComments: ics },
+      };
+    },
+  );
 }
