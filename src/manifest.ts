@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "2.1.0",
+  version: "2.1.1",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -66,8 +66,8 @@ const manifest: PaperclipPluginManifestV1 = {
       webhookInfo: {
         type: "string",
         title: "Webhook URL (Auto Review)",
-        description: "Configure no GitHub: Settings → Webhooks → Add webhook. Cole a URL abaixo. Events: Pull requests, Issues. Content type: application/json.",
-        default: "/plugins/cus.github-manager/webhooks/github-events",
+        description: "Configure no GitHub: Settings → Webhooks → Add webhook. Cole a URL completa (substitua <host> pelo seu domínio). Events: Pull requests, Issues. Content type: application/json. O plugin ID é preenchido automaticamente após instalação.",
+        default: "/api/plugins/<plugin-id>/webhooks/github-events",
         readOnly: true,
       },
     },

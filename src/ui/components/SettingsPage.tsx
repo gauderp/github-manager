@@ -163,13 +163,13 @@ export function GitHubSettingsPage() {
             <strong style={{ fontSize: "11px", opacity: 0.6, display: "block", marginBottom: "4px" }}>Payload URL</strong>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <code style={{ flex: 1, wordBreak: "break-all" }}>
-                {typeof window !== "undefined" ? `${window.location.origin}/plugins/cus.github-manager/webhooks/github-events` : "<your-host>/plugins/cus.github-manager/webhooks/github-events"}
+                {typeof window !== "undefined" ? `${window.location.origin}/api/plugins/70603f46-017a-409b-bdf5-ca5a17c20bb4/webhooks/github-events` : "<your-host>/api/plugins/<plugin-id>/webhooks/github-events"}
               </code>
               <button
                 type="button"
                 style={{ ...buttonStyle, fontSize: "11px", padding: "4px 8px" }}
                 onClick={() => {
-                  const url = `${window.location.origin}/plugins/cus.github-manager/webhooks/github-events`;
+                  const url = `${window.location.origin}/api/plugins/70603f46-017a-409b-bdf5-ca5a17c20bb4/webhooks/github-events`;
                   navigator.clipboard.writeText(url).then(() => setStatus("URL copiada!"));
                 }}
               >
