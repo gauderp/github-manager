@@ -9,3 +9,8 @@ master.key
 *.key
 .env
 .env.*
+
+# Deployment-specific (keep private)
+Dockerfile
+fly.toml
+entrypoint.sh
