@@ -408,4 +408,126 @@ export function registerReviewTools(ctx: PluginContext): void {
       };
     },
   );
+
+  // ── github_list_pr_files ──
+  ctx.tools.register(
+    "github_list_pr_files",
+    {
+      displayName: "List PR Files",
+      description: "List files changed in a PR with addition/deletion stats and patches",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          pull_number: { type: "number", description: "PR number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { owner, repo, pull_number } = params as { owner: string; repo: string; pull_number: number };
+      const companyId = runCtx.companyId;
+      if (!companyId) return { error: "No company context" };
+
+      const { data } = await githubFetch(
+        ctx, companyId,
+        `/repos/${owner}/${repo}/pulls/${pull_number}/files?per_page=100`,
+      );
+      const files = (data as Array<Record<string, unknown>>).map((f) => ({
+        filename: f.filename as string,
+        status: f.status as string,
+        additions: f.additions as number,
+        deletions: f.deletions as number,
+        patch: f.patch as string | undefined,
+      }));
+
+      const totalAdditions = files.reduce((sum, f) => sum + f.additions, 0);
+      const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
+
+      const lines = [
+        `PR #${pull_number} — ${files.length} file(s) changed (+${totalAdditions} -${totalDeletions}):`,
+        "",
+        ...files.map((f) => `[${f.status.toUpperCase()}] ${f.filename} (+${f.additions} -${f.deletions})`),
+      ];
+
+      return {
+        content: lines.join("\n"),
+        data: { files, totalAdditions, totalDeletions, fileCount: files.length },
+      };
+    },
+  );
+
+  // ── github_approve_pr ──
+  ctx.tools.register(
+    "github_approve_pr",
+    {
+      displayName: "Approve PR",
+      description: "Approve a pull request with an optional message",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          pull_number: { type: "number", description: "PR number" },
+          body: { type: "string", description: "Optional approval message" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { owner, repo, pull_number, body } = params as {
+        owner: string; repo: string; pull_number: number; body?: string;
+      };
+      const companyId = runCtx.companyId;
+      if (!companyId) return { error: "No company context" };
+
+      await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/pulls/${pull_number}/reviews`, {
+        method: "POST",
+        body: { event: "APPROVE", body: body ?? "" },
+      });
+
+      return {
+        content: `PR #${pull_number} approved${body ? `: "${body}"` : ""}`,
+        data: { owner, repo, pull_number, event: "APPROVE" },
+      };
+    },
+  );
+
+  // ── github_request_changes ──
+  ctx.tools.register(
+    "github_request_changes",
+    {
+      displayName: "Request Changes",
+      description: "Request changes on a pull request with a required summary",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          pull_number: { type: "number", description: "PR number" },
+          body: { type: "string", description: "Summary of requested changes (required by GitHub API)" },
+        },
+        required: ["owner", "repo", "pull_number", "body"],
+      },
+    },
+    async (params: unknown, runCtx: ToolRunContext): Promise<ToolResult> => {
+      const { owner, repo, pull_number, body } = params as {
+        owner: string; repo: string; pull_number: number; body: string;
+      };
+      const companyId = runCtx.companyId;
+      if (!companyId) return { error: "No company context" };
+      if (!body || body.trim().length === 0) return { error: "body is required when requesting changes" };
+
+      await githubFetch(ctx, companyId, `/repos/${owner}/${repo}/pulls/${pull_number}/reviews`, {
+        method: "POST",
+        body: { event: "REQUEST_CHANGES", body },
+      });
+
+      return {
+        content: `Changes requested on PR #${pull_number}: "${body}"`,
+        data: { owner, repo, pull_number, event: "REQUEST_CHANGES" },
+      };
+    },
+  );
 }

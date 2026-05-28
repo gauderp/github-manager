@@ -1,6 +1,7 @@
 import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import type { PluginContext } from "@paperclipai/plugin-sdk";
 import { registerReviewTools } from "./review/review-tools.js";
+import { registerTriageTools } from "./triage/triage-tools.js";
 import { handleGithubWebhook } from "./sync/webhook-handler.js";
 import { runIncrementalSync } from "./sync/incremental-sync.js";
 import { runFullSync } from "./sync/full-sync.js";
@@ -10,6 +11,7 @@ import {
   listRepos, listPRs, getLinksForCard,
   getLastSyncTime, upsertRepo, linkPRToCard,
   getRepoByFullName,
+  listTriageRules, upsertTriageRule, updateTriageRule, deleteTriageRule,
 } from "./db/queries.js";
 import { saveGithubPAT, saveGithubSecretRef, resolveGithubToken } from "./github/config.js";
 import { githubFetch } from "./github/api-client.js";
@@ -19,10 +21,11 @@ let pluginCtx: PluginContext | null = null;
 const plugin = definePlugin({
   async setup(ctx) {
     pluginCtx = ctx;
-    ctx.logger.info("GitHub Manager v2 starting");
+    ctx.logger.info("GitHub Manager v3 starting");
 
     // ── Tools ──
     registerReviewTools(ctx);
+    registerTriageTools(ctx);
 
     // ── Jobs ──
     ctx.jobs.register("sync-github", async (job) => {
@@ -74,6 +77,21 @@ const plugin = definePlugin({
       return await generateCodeGraph(ctx, companyId as string, repoFullName as string);
     });
 
+    ctx.data.register("triage-rules", async ({ companyId, repoId }) => {
+      if (!repoId) return { rules: [] };
+      const rules = await listTriageRules(ctx.db, repoId as number);
+      return { rules };
+    });
+
+    ctx.data.register("review-guidelines", async ({ companyId, repoId }) => {
+      if (!companyId || !repoId) return { guidelines: "" };
+      const guidelines = await ctx.state.get({
+        scopeKind: "company",
+        scopeId: companyId as string,
+        stateKey: `review-guidelines-${repoId}`,
+      }) as string | undefined;
+      return { guidelines: guidelines ?? "" };
+    });
 
     // ── Action handlers (UI writes) ──
 
@@ -150,7 +168,7 @@ const plugin = definePlugin({
           ``,
           `PR link: https://github.com/${repoFullName}/pull/${prNumber}`,
         ].join("\n"),
-        originKind: "plugin_github_review",
+        originKind: "plugin:github_review",
         originId: `${repoFullName}#${prNumber}`,
       });
 
@@ -173,13 +191,68 @@ const plugin = definePlugin({
       return await generateCodeGraph(ctx, companyId as string, repoFullName as string);
     });
 
+    ctx.actions.register("save-triage-rule", async ({ companyId, rule }) => {
+      const r = rule as {
+        id?: number;
+        repoId: number;
+        ruleName: string;
+        conditionType: "keyword" | "path" | "author" | "label_prefix";
+        conditionValue: string;
+        actionType: "add_label" | "set_assignee" | "set_priority";
+        actionValue: string;
+        priority: number;
+        enabled: boolean;
+      };
+
+      if (r.id) {
+        await updateTriageRule(ctx.db, r.id, {
+          ruleName: r.ruleName,
+          conditionType: r.conditionType,
+          conditionValue: r.conditionValue,
+          actionType: r.actionType,
+          actionValue: r.actionValue,
+          priority: r.priority,
+          enabled: r.enabled,
+        });
+        return { ok: true, id: r.id };
+      } else {
+        await upsertTriageRule(ctx.db, {
+          repoId: r.repoId,
+          ruleName: r.ruleName,
+          conditionType: r.conditionType,
+          conditionValue: r.conditionValue,
+          actionType: r.actionType,
+          actionValue: r.actionValue,
+          priority: r.priority,
+          enabled: r.enabled,
+        });
+        return { ok: true };
+      }
+    });
+
+    ctx.actions.register("delete-triage-rule", async ({ companyId, ruleId }) => {
+      await deleteTriageRule(ctx.db, ruleId as number);
+      return { ok: true };
+    });
+
+    ctx.actions.register("save-review-guidelines", async ({ companyId, repoId, guidelines }) => {
+      await ctx.state.set({
+        scopeKind: "company",
+        scopeId: companyId as string,
+        stateKey: `review-guidelines-${repoId}`,
+      }, guidelines as string);
+      return { ok: true };
+    });
+
     // ── Managed resource reconciliation ──
     // Reconcile for existing companies on startup
     const companies = await ctx.companies.list();
     for (const company of companies) {
       try {
         await ctx.agents.managed.reconcile("github-reviewer", company.id);
+        await ctx.agents.managed.reconcile("github-triager", company.id);
         await ctx.skills.managed.reconcile("github-codebase-access", company.id);
+        await ctx.skills.managed.reconcile("github-triage", company.id);
       } catch (err) {
         ctx.logger.warn(`Reconcile failed for company ${company.id}: ${err}`);
       }
@@ -187,12 +260,14 @@ const plugin = definePlugin({
 
     ctx.events.on("company.created", async (event) => {
       await ctx.agents.managed.reconcile("github-reviewer", event.companyId);
+      await ctx.agents.managed.reconcile("github-triager", event.companyId);
       await ctx.skills.managed.reconcile("github-codebase-access", event.companyId);
+      await ctx.skills.managed.reconcile("github-triage", event.companyId);
     });
   },
 
   async onHealth() {
-    return { status: "ok", message: "GitHub Manager v2 running" };
+    return { status: "ok", message: "GitHub Manager v3 running" };
   },
 
   async onWebhook(input) {

@@ -6,6 +6,8 @@ import type {
   PRCardLink,
   SyncLogEntry,
   PRWithRepo,
+  TriageRule,
+  TriageRuleInput,
 } from "../types.js";
 
 type DB = PluginContext["db"];
@@ -257,5 +259,77 @@ export async function getRepoGraph(db: DB, fullName: string): Promise<{ graphJso
   return {
     graphJson: rows[0].graph_json as string,
     generatedAt: rows[0].graph_generated_at as string,
+  };
+}
+
+// ── Triage Rules ──
+
+export async function listTriageRules(db: DB, repoId: number): Promise<TriageRule[]> {
+  const rows = await db.query(
+    `SELECT * FROM ${S}.gh_triage_rules WHERE repo_id = $1 ORDER BY priority DESC, id ASC`,
+    [repoId],
+  );
+  return rows.map(mapTriageRule);
+}
+
+export async function listEnabledTriageRules(db: DB, repoId: number): Promise<TriageRule[]> {
+  const rows = await db.query(
+    `SELECT * FROM ${S}.gh_triage_rules WHERE repo_id = $1 AND enabled = true ORDER BY priority DESC, id ASC`,
+    [repoId],
+  );
+  return rows.map(mapTriageRule);
+}
+
+export async function upsertTriageRule(db: DB, rule: TriageRuleInput): Promise<void> {
+  const now = new Date().toISOString();
+  await db.execute(
+    `INSERT INTO ${S}.gh_triage_rules
+       (repo_id, rule_name, condition_type, condition_value, action_type, action_value, priority, enabled, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)`,
+    [
+      rule.repoId, rule.ruleName, rule.conditionType, rule.conditionValue,
+      rule.actionType, rule.actionValue, rule.priority, rule.enabled, now,
+    ],
+  );
+}
+
+export async function updateTriageRule(db: DB, id: number, rule: Partial<TriageRuleInput>): Promise<void> {
+  const now = new Date().toISOString();
+  const sets: string[] = ["updated_at = $1"];
+  const params: unknown[] = [now];
+  let idx = 2;
+
+  if (rule.ruleName !== undefined) { sets.push(`rule_name = $${idx++}`); params.push(rule.ruleName); }
+  if (rule.conditionType !== undefined) { sets.push(`condition_type = $${idx++}`); params.push(rule.conditionType); }
+  if (rule.conditionValue !== undefined) { sets.push(`condition_value = $${idx++}`); params.push(rule.conditionValue); }
+  if (rule.actionType !== undefined) { sets.push(`action_type = $${idx++}`); params.push(rule.actionType); }
+  if (rule.actionValue !== undefined) { sets.push(`action_value = $${idx++}`); params.push(rule.actionValue); }
+  if (rule.priority !== undefined) { sets.push(`priority = $${idx++}`); params.push(rule.priority); }
+  if (rule.enabled !== undefined) { sets.push(`enabled = $${idx++}`); params.push(rule.enabled); }
+
+  params.push(id);
+  await db.execute(
+    `UPDATE ${S}.gh_triage_rules SET ${sets.join(", ")} WHERE id = $${idx}`,
+    params,
+  );
+}
+
+export async function deleteTriageRule(db: DB, id: number): Promise<void> {
+  await db.execute(`DELETE FROM ${S}.gh_triage_rules WHERE id = $1`, [id]);
+}
+
+function mapTriageRule(row: Record<string, unknown>): TriageRule {
+  return {
+    id: row.id as number,
+    repoId: row.repo_id as number,
+    ruleName: row.rule_name as string,
+    conditionType: row.condition_type as TriageRule["conditionType"],
+    conditionValue: row.condition_value as string,
+    actionType: row.action_type as TriageRule["actionType"],
+    actionValue: row.action_value as string,
+    priority: row.priority as number,
+    enabled: row.enabled as boolean,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
   };
 }

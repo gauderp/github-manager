@@ -88,3 +88,43 @@ export type ReviewSummary = {
   commentCount: number;
   reviewedAt: string;
 };
+
+// ── Triage ──
+
+export type TriageRule = {
+  id: number;
+  repoId: number;
+  ruleName: string;
+  conditionType: "keyword" | "path" | "author" | "label_prefix";
+  conditionValue: string;
+  actionType: "add_label" | "set_assignee" | "set_priority";
+  actionValue: string;
+  priority: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TriageRuleInput = Omit<TriageRule, "id" | "createdAt" | "updatedAt">;
+
+export type GitHubLabel = {
+  id: number;
+  name: string;
+  color: string;
+  description: string | null;
+};
+
+export type PRFileChange = {
+  filename: string;
+  status: "added" | "removed" | "modified" | "renamed" | "copied" | "changed" | "unchanged";
+  additions: number;
+  deletions: number;
+  patch?: string;
+};
+
+export type ReviewGuidelines = {
+  repoId: number;
+  repoFullName: string;
+  guidelines: string;
+  updatedAt: string;
+};

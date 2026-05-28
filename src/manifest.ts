@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "2.2.0",
+  version: "3.0.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -69,6 +69,18 @@ const manifest: PaperclipPluginManifestV1 = {
         description: "Configure no GitHub: Settings → Webhooks → Add webhook. Cole a URL completa (substitua <host> pelo seu domínio). Events: Pull requests, Issues. Content type: application/json. O plugin ID é preenchido automaticamente após instalação.",
         default: "/api/plugins/<plugin-id>/webhooks/github-events",
         readOnly: true,
+      },
+      autoReviewEnabled: {
+        type: "boolean",
+        title: "Auto Review Enabled",
+        description: "Automatically assign the github-reviewer agent when a PR is opened or ready for review",
+        default: false,
+      },
+      autoTriageEnabled: {
+        type: "boolean",
+        title: "Auto Triage Enabled",
+        description: "Automatically assign the github-triager agent when an issue is opened",
+        default: false,
       },
     },
   },
@@ -222,6 +234,108 @@ const manifest: PaperclipPluginManifestV1 = {
         required: ["repo_full_name"],
       },
     },
+    {
+      name: "github_add_labels",
+      displayName: "Add Labels",
+      description: "Add labels to a GitHub issue or PR",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          issue_number: { type: "number" },
+          labels: { type: "array", items: { type: "string" } },
+        },
+        required: ["owner", "repo", "issue_number", "labels"],
+      },
+    },
+    {
+      name: "github_set_assignees",
+      displayName: "Set Assignees",
+      description: "Set assignees on a GitHub issue or PR",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          issue_number: { type: "number" },
+          assignees: { type: "array", items: { type: "string" } },
+        },
+        required: ["owner", "repo", "issue_number", "assignees"],
+      },
+    },
+    {
+      name: "github_add_comment",
+      displayName: "Add Comment",
+      description: "Add a comment to a GitHub issue or PR",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          issue_number: { type: "number" },
+          body: { type: "string" },
+        },
+        required: ["owner", "repo", "issue_number", "body"],
+      },
+    },
+    {
+      name: "github_list_labels",
+      displayName: "List Repository Labels",
+      description: "List all labels available in a repository",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+    {
+      name: "github_list_pr_files",
+      displayName: "List PR Files",
+      description: "List files changed in a PR with addition/deletion stats and patches",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
+      name: "github_approve_pr",
+      displayName: "Approve PR",
+      description: "Approve a pull request with an optional message",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          body: { type: "string", description: "Optional approval message" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
+      name: "github_request_changes",
+      displayName: "Request Changes",
+      description: "Request changes on a pull request with a required summary",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+          body: { type: "string", description: "Summary of requested changes (required)" },
+        },
+        required: ["owner", "repo", "pull_number", "body"],
+      },
+    },
   ],
 
   agents: [
@@ -271,6 +385,74 @@ Be constructive and specific. Explain WHY something is an issue and suggest a fi
 `,
       },
     },
+    {
+      agentKey: "github-triager",
+      displayName: "GitHub Issue Triager",
+      role: "triage",
+      title: "Issue Triage Specialist",
+      capabilities: "Classifies and routes newly opened GitHub issues by type, priority, and area. Applies labels, sets assignees, and posts a triage summary comment.",
+      instructions: {
+        entryFile: "AGENTS.md",
+        content: `# GitHub Issue Triager
+
+You are an expert issue triager. You classify and route newly opened GitHub issues.
+
+## Available Tools
+
+- **github_list_labels** — List all labels available in the repo
+- **github_add_labels** — Apply classification labels to an issue
+- **github_set_assignees** — Assign the issue to the right person/team
+- **github_add_comment** — Post a triage summary comment on the issue
+- **github_search_issues** — Search for similar past issues for context
+
+## Triage Workflow
+
+1. Read the issue title and body from the card description carefully
+2. Use \`github_list_labels\` to see all available labels in the repo
+3. Classify by TYPE: bug, enhancement, question, documentation, invalid, wontfix
+4. Classify by PRIORITY: critical, high, medium, low
+5. Classify by AREA: frontend, backend, infra, devops, testing (if identifiable from content)
+6. Use \`github_add_labels\` to apply all relevant labels
+7. Use \`github_set_assignees\` if you can determine the right owner from the area/content
+8. Use \`github_add_comment\` to post a triage summary
+
+## Priority Rules
+
+- **critical**: keywords "crash", "data loss", "security", "vulnerability", "breach", "outage", "production down"
+- **high**: keywords "broken", "error", "fail", "regression", "blocked", "urgent"
+- **medium**: keywords "slow", "performance", "improvement", "inconsistent"
+- **low**: keywords "typo", "docs", "cleanup", "cosmetic", "nice to have"
+
+## Triage Comment Format
+
+Post this comment after triaging:
+
+\`\`\`
+## Triage Summary
+
+**Type:** {bug | enhancement | question | documentation}
+**Priority:** {critical | high | medium | low}
+**Area:** {frontend | backend | infra | devops | testing | unknown}
+
+{1-2 sentence summary of the issue and why it was classified this way}
+
+{If similar issues exist: "Related to #123"}
+
+{If more info needed: "Please provide: {what is missing}"}
+
+---
+*Triaged automatically by GitHub Triager*
+\`\`\`
+
+## Fallback
+
+If you cannot determine classification with confidence:
+- Apply label \`needs-triage\`
+- Do NOT assign anyone
+- Post comment asking for clarification
+`,
+      },
+    },
   ],
 
   skills: [
@@ -315,6 +497,51 @@ When reviewing a PR:
 2. Read only the files you need with \`github_read_file_content\`
 3. If structure seems outdated, call with \`refresh=true\`
 4. Never access the local filesystem — always use these tools
+`,
+    },
+    {
+      skillKey: "github-triage",
+      displayName: "GitHub Issue Triage",
+      description: "Provides agents with tools and workflow to classify, label, assign, and comment on GitHub issues",
+      markdown: `# GitHub Issue Triage
+
+You have access to GitHub issue management tools through the GitHub Manager plugin.
+
+## Available Triage Tools
+
+- **github_list_labels** — List all labels in a repo. Params: \`owner\`, \`repo\`
+- **github_add_labels** — Add labels to an issue/PR. Params: \`owner\`, \`repo\`, \`issue_number\`, \`labels\` (array)
+- **github_set_assignees** — Set assignees on an issue/PR. Params: \`owner\`, \`repo\`, \`issue_number\`, \`assignees\` (array)
+- **github_add_comment** — Post a comment. Params: \`owner\`, \`repo\`, \`issue_number\`, \`body\`
+- **github_search_issues** — Search for similar issues. Params: \`query\`
+
+## Triage Workflow
+
+When triaging a newly opened issue:
+1. \`github_list_labels\` — see what labels exist in the repo
+2. Classify by type, priority, area based on issue content
+3. \`github_add_labels\` — apply all classification labels in a single call
+4. \`github_set_assignees\` — assign if area/owner is clear (empty array to skip)
+5. \`github_add_comment\` — post triage summary with classification reasoning
+
+## Priority Classification
+
+| Priority | Keywords |
+|----------|----------|
+| critical | crash, data loss, security, vulnerability, breach, outage, production down |
+| high | broken, error, fail, regression, blocked, urgent |
+| medium | slow, performance, improvement, inconsistent |
+| low | typo, docs, cleanup, cosmetic, nice to have |
+
+## Label Convention
+
+Apply labels that exist in the repo. Common patterns:
+- Type: \`bug\`, \`enhancement\`, \`question\`, \`documentation\`
+- Priority: \`priority: critical\`, \`priority: high\`, \`priority: medium\`, \`priority: low\`
+- Area: \`area: frontend\`, \`area: backend\`, \`area: infra\`
+- Fallback: \`needs-triage\` when unsure
+
+If the needed label doesn't exist in the repo, skip it and note it in the comment.
 `,
     },
   ],

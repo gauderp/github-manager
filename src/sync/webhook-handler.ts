@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PluginContext, PluginWebhookInput } from "@paperclipai/plugin-sdk";
-import { upsertRepo, upsertPR, upsertIssue, linkPRToCard } from "../db/queries.js";
+import { upsertRepo, upsertPR, upsertIssue, linkPRToCard, getRepoByFullName } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
@@ -98,10 +98,39 @@ async function handlePullRequestEvent(
     const [owner, repoName] = repoFullName.split("/");
 
     try {
-      // Get companyId from first company (single-tenant assumption)
       const companies = await ctx.companies.list();
       if (companies.length === 0) return;
       const companyId = companies[0].id;
+
+      // Check if auto-review is enabled — if so, attach agentId
+      const config = await ctx.config.get();
+      const autoReviewEnabled = (config?.autoReviewEnabled as boolean | undefined) ?? false;
+
+      let reviewerAgentId: string | undefined;
+      if (autoReviewEnabled) {
+        try {
+          const reviewer = await ctx.agents.managed.get("github-reviewer", companyId);
+          reviewerAgentId = reviewer?.agentId ?? undefined;
+        } catch { /* agent not reconciled yet */ }
+      }
+
+      // Read per-repo review guidelines from state
+      const repo = await getRepoByFullName(ctx.db, repoFullName);
+      let guidelinesSection = "";
+      if (repo) {
+        const guidelines = await ctx.state.get({
+          scopeKind: "company",
+          scopeId: companyId,
+          stateKey: `review-guidelines-${repo.id}`,
+        }) as string | undefined;
+        if (guidelines) {
+          guidelinesSection = [
+            "",
+            "## Repository Review Guidelines",
+            guidelines,
+          ].join("\n");
+        }
+      }
 
       const issue = await ctx.issues.create({
         companyId,
@@ -112,21 +141,23 @@ async function handlePullRequestEvent(
           `## Review Tasks`,
           `1. Use \`github_get_repo_structure\` with repo_full_name="${repoFullName}" to understand the codebase`,
           `2. Use \`github_get_pull_request_diff\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to get the diff`,
-          `3. Use \`github_get_pr_checks\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to verify CI/CD status`,
-          `4. Use \`github_get_pr_comments\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to check existing review comments`,
-          `5. Read relevant files with \`github_read_file_content\` for context`,
-          `6. Post inline comments with \`github_create_review_comment\` for issues found`,
-          `7. If changes are needed, submit review with \`github_submit_pr_review\` event="REQUEST_CHANGES" and tag @${pr.author}`,
-          `8. If everything looks good, submit with event="APPROVE"`,
+          `3. Use \`github_list_pr_files\` with owner="${owner}", repo="${repoName}", pull_number=${pr.number} to see changed files overview`,
+          `4. Use \`github_get_pr_checks\` to verify CI/CD status`,
+          `5. Use \`github_get_pr_comments\` to check existing review comments`,
+          `6. Read relevant files with \`github_read_file_content\` for context`,
+          `7. Post inline comments with \`github_create_review_comment\` for issues found`,
+          `8. Use \`github_approve_pr\` if everything looks good, or \`github_request_changes\` if changes are needed`,
+          guidelinesSection,
           ``,
           `PR: https://github.com/${repoFullName}/pull/${pr.number}`,
         ].join("\n"),
-        originKind: "plugin_github_review",
+        originKind: "plugin:github_review",
         originId: `${repoFullName}#${pr.number}`,
+        ...(reviewerAgentId ? { agentId: reviewerAgentId } : {}),
       });
 
       await linkPRToCard(ctx.db, pr.id, issue.id, "webhook");
-      ctx.logger.info(`Webhook: auto-created review issue for PR #${pr.number}`);
+      ctx.logger.info(`Webhook: auto-created review issue for PR #${pr.number} (autoReview=${autoReviewEnabled})`);
     } catch (err) {
       ctx.logger.error(`Webhook: failed to create review issue for PR #${pr.number}: ${err}`);
     }
@@ -139,7 +170,11 @@ async function handleIssuesEvent(
 ): Promise<void> {
   const issueData = payload.issue as Record<string, unknown>;
   const repoData = payload.repository as Record<string, unknown>;
+  const action = payload.action as string;
   if (!issueData || !repoData) return;
+
+  // Skip issues that are actually PRs
+  if (issueData.pull_request) return;
 
   await upsertRepo(ctx.db, {
     id: repoData.id as number,
@@ -173,4 +208,59 @@ async function handleIssuesEvent(
 
   await upsertIssue(ctx.db, issue);
   ctx.logger.info(`Webhook: upserted issue #${issue.number} from ${repoData.full_name}`);
+
+  // Auto-triage: create a Paperclip card for the triager agent when issue is opened
+  if (action === "opened") {
+    try {
+      const config = await ctx.config.get();
+      const autoTriageEnabled = (config?.autoTriageEnabled as boolean | undefined) ?? false;
+      if (!autoTriageEnabled) return;
+
+      const companies = await ctx.companies.list();
+      if (companies.length === 0) return;
+      const companyId = companies[0].id;
+
+      let triagerAgentId: string | undefined;
+      try {
+        const triager = await ctx.agents.managed.get("github-triager", companyId);
+        triagerAgentId = triager?.agentId ?? undefined;
+      } catch { /* agent not reconciled yet */ }
+
+      const repoFullName = repoData.full_name as string;
+      const [owner, repoName] = repoFullName.split("/");
+
+      const triageCard = await ctx.issues.create({
+        companyId,
+        title: `Triage: ${repoFullName}#${issue.number} — ${issue.title}`,
+        description: [
+          `Triage issue #${issue.number} in **${repoFullName}** opened by @${issue.author}`,
+          ``,
+          `## Issue Details`,
+          `**Title:** ${issue.title}`,
+          `**URL:** ${issue.htmlUrl}`,
+          `**Current Labels:** ${issue.labels.length > 0 ? issue.labels.join(", ") : "none"}`,
+          ``,
+          `## Issue Body`,
+          issue.body ? issue.body.slice(0, 2000) : "_No description provided_",
+          issue.body && issue.body.length > 2000 ? "\n_(body truncated — read full issue via github_search_issues)_" : "",
+          ``,
+          `## Triage Instructions`,
+          `1. Use \`github_list_labels\` with owner="${owner}", repo="${repoName}" to see available labels`,
+          `2. Classify the issue by type, priority, and area`,
+          `3. Use \`github_add_labels\` with owner="${owner}", repo="${repoName}", issue_number=${issue.number} to apply labels`,
+          `4. Use \`github_set_assignees\` if you can determine the right owner`,
+          `5. Use \`github_add_comment\` to post your triage summary`,
+          ``,
+          `If unsure, apply \`needs-triage\` label and post a comment asking for clarification.`,
+        ].join("\n"),
+        originKind: "plugin:github_triage",
+        originId: `${repoFullName}#${issue.number}`,
+        ...(triagerAgentId ? { agentId: triagerAgentId } : {}),
+      });
+
+      ctx.logger.info(`Webhook: auto-created triage card for issue #${issue.number} (cardId=${triageCard.id})`);
+    } catch (err) {
+      ctx.logger.error(`Webhook: failed to create triage card for issue #${issue.number}: ${err}`);
+    }
+  }
 }
