@@ -189,3 +189,79 @@ export type DeployGateCheck = {
   passed: boolean;
   detail: string;
 };
+
+// ── Phase 3: Metrics ──
+
+export type PRMetrics = {
+  prId: number;
+  repoId: number;
+  cycleTimeHours: number | null;
+  timeToFirstReviewHours: number | null;
+  reviewRounds: number;
+  additions: number;
+  deletions: number;
+  mergedBy: string | null;
+  createdAt: string | null;
+  mergedAt: string | null;
+};
+
+export type ContributorStat = {
+  login: string;
+  commits: number;
+  pullRequestsOpened: number;
+  pullRequestsMerged: number;
+  reviewsGiven: number;
+  additions: number;
+  deletions: number;
+};
+
+export type PRTimelineEvent = {
+  event: string;
+  actor: string | null;
+  createdAt: string;
+  state?: string;
+  body?: string;
+};
+
+// ── Phase 3: Standup ──
+
+export type StandupReport = {
+  id: number;
+  companyId: string;
+  reportDate: string;
+  reportMarkdown: string;
+  reposIncluded: number[];
+  contributors: string[];
+  highlights: string[];
+  generatedAt: string;
+};
+
+export type StandupActivity = {
+  repoFullName: string;
+  prsOpened: Array<{ number: number; title: string; author: string; url: string }>;
+  prsMerged: Array<{ number: number; title: string; author: string; url: string }>;
+  issuesOpened: Array<{ number: number; title: string; author: string; url: string }>;
+  issuesClosed: Array<{ number: number; title: string; author: string; url: string }>;
+  prsAwaitingReview: Array<{ number: number; title: string; author: string; hoursOpen: number; url: string }>;
+};
+
+// ── Phase 3: Releases ──
+
+export type GitHubRelease = {
+  id: number;
+  tagName: string;
+  name: string;
+  body: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  publishedAt: string | null;
+  htmlUrl: string;
+};
+
+export type GitHubCommit = {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+  url: string;
+};

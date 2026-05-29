@@ -7,6 +7,8 @@ export { GitHubSettingsPage } from "./components/SettingsPage.js";
 export { GitHubReposPage } from "./components/ReposPage.js";
 export { GitHubPullRequestsPage } from "./components/PullRequestsPage.js";
 export { GitHubGraphsPage } from "./components/GraphsPage.js";
+export { GitHubMetricsPage } from "./components/MetricsPage.js";
+export { GitHubStandupPage } from "./components/StandupPage.js";
 
 // Detail tab (inside cards)
 export { GitHubDetailTab } from "./components/DetailTab.js";

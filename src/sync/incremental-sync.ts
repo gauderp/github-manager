@@ -5,6 +5,7 @@ import {
   getLastSyncTime, createSyncLog, completeSyncLog,
 } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
+import { calculateAndSavePRMetrics } from "../metrics/metrics-calculator.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
 export async function runIncrementalSync(ctx: PluginContext, companyId: string): Promise<void> {
@@ -77,6 +78,14 @@ async function syncRepoPRs(
 
     await upsertPR(ctx.db, pr);
     await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
+
+    // Calculate engineering metrics for newly merged PRs
+    if (pr.state === "merged" && pr.mergedAt) {
+      await calculateAndSavePRMetrics(
+        ctx, companyId, fullName,
+        pr.id, repoId, pr.number, pr.createdAt, pr.mergedAt,
+      );
+    }
   }
 
   return items.length;

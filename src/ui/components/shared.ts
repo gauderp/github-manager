@@ -5,6 +5,8 @@ export const ROUTES = {
   repos: "github-repos",
   prs: "github-prs",
   graphs: "github-graphs",
+  metrics: "github-metrics",
+  standups: "github-standups",
 } as const;
 
 export const PATHS = {
@@ -12,6 +14,8 @@ export const PATHS = {
   repos: "/github-repos",
   prs: "/github-prs",
   graphs: "/github-graphs",
+  metrics: "/github-metrics",
+  standups: "/github-standups",
 } as const;
 
 export const layoutStack: React.CSSProperties = {

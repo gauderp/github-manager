@@ -14,9 +14,13 @@ import {
   getLastSyncTime, upsertRepo, linkPRToCard,
   getRepoByFullName,
   listTriageRules, upsertTriageRule, updateTriageRule, deleteTriageRule,
+  listStandupReports, getMetricsSummary, getMetricsByRepo,
 } from "./db/queries.js";
 import { saveGithubPAT, saveGithubSecretRef, resolveGithubToken } from "./github/config.js";
 import { githubFetch } from "./github/api-client.js";
+import { registerMetricsTools } from "./metrics/metrics-tools.js";
+import { registerReleaseTools } from "./releases/release-tools.js";
+import { generateAndSaveStandupReport } from "./metrics/standup-generator.js";
 
 let pluginCtx: PluginContext | null = null;
 
@@ -29,6 +33,8 @@ const plugin = definePlugin({
     registerReviewTools(ctx);
     registerTriageTools(ctx);
     registerCITools(ctx);
+    registerMetricsTools(ctx);
+    registerReleaseTools(ctx);
 
     // ── Jobs ──
     ctx.jobs.register("sync-github", async (job) => {
@@ -39,6 +45,25 @@ const plugin = definePlugin({
           await runIncrementalSync(ctx, company.id);
         } catch (err) {
           ctx.logger.error(`Sync failed for company ${company.id}: ${err}`);
+        }
+      }
+    });
+
+    ctx.jobs.register("daily-standup", async (_job) => {
+      ctx.logger.info("Running daily standup report");
+      const companies = await ctx.companies.list();
+      for (const company of companies) {
+        try {
+          const report = await generateAndSaveStandupReport(ctx, company.id);
+          await ctx.issues.create({
+            companyId: company.id,
+            title: `Standup ${new Date().toISOString().slice(0, 10)}`,
+            description: report,
+            originKind: "plugin_github_standup",
+            originId: `standup_${new Date().toISOString().slice(0, 10)}_${company.id}`,
+          });
+        } catch (err) {
+          ctx.logger.error(`Standup failed for company ${company.id}: ${err}`);
         }
       }
     });
@@ -94,6 +119,23 @@ const plugin = definePlugin({
         stateKey: `review-guidelines-${repoId}`,
       }) as string | undefined;
       return { guidelines: guidelines ?? "" };
+    });
+
+    ctx.data.register("metrics-data", async ({ companyId, repoId, period }) => {
+      if (!repoId) return { summary: null, metrics: [] };
+      const daysAgo = typeof period === "number" ? period : 30;
+      const since = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+      const [summary, metrics] = await Promise.all([
+        getMetricsSummary(ctx.db, repoId as number, since),
+        getMetricsByRepo(ctx.db, repoId as number, since),
+      ]);
+      return { summary, metrics };
+    });
+
+    ctx.data.register("standup-reports", async ({ companyId, limit }) => {
+      if (!companyId) return { reports: [] };
+      const reports = await listStandupReports(ctx.db, companyId as string, (limit as number) ?? 30);
+      return { reports };
     });
 
     // ── Action handlers (UI writes) ──
@@ -262,6 +304,28 @@ const plugin = definePlugin({
       };
     });
 
+    ctx.actions.register("generate-release-notes", async ({ companyId, repoFullName, baseTag, newTag }) => {
+      if (!companyId || !repoFullName) return { ok: false, error: "Missing companyId or repoFullName" };
+      const [owner, repo] = (repoFullName as string).split("/");
+      const issue = await ctx.issues.create({
+        companyId: companyId as string,
+        title: `Release Notes: ${repoFullName} ${newTag ?? "next"}`,
+        description: [
+          `Generate release notes for ${repoFullName}.`,
+          ``,
+          `## Instructions`,
+          `1. Call \`github_list_releases\` for ${owner}/${repo} to find the last release`,
+          `2. Call \`github_list_commits_between\` with base="${baseTag ?? "last release tag"}", head="HEAD"`,
+          `3. Categorize commits by conventional commit type`,
+          `4. Call \`github_create_release\` with tag_name="${newTag ?? "NEXT_VERSION"}", draft=true`,
+          `5. Report the draft release URL`,
+        ].join("\n"),
+        originKind: "plugin_github_release",
+        originId: `release_${repoFullName}_${newTag ?? Date.now()}`,
+      });
+      return { ok: true, issueId: issue.id };
+    });
+
     // ── Managed resource reconciliation ──
     // Reconcile for existing companies on startup
     const companies = await ctx.companies.list();
@@ -270,9 +334,13 @@ const plugin = definePlugin({
         await ctx.agents.managed.reconcile("github-reviewer", company.id);
         await ctx.agents.managed.reconcile("github-triager", company.id);
         await ctx.agents.managed.reconcile("ci-companion", company.id);
+        await ctx.agents.managed.reconcile("release-reporter", company.id);
+        await ctx.agents.managed.reconcile("standup-reporter", company.id);
         await ctx.skills.managed.reconcile("github-codebase-access", company.id);
         await ctx.skills.managed.reconcile("github-triage", company.id);
         await ctx.skills.managed.reconcile("ci-analysis", company.id);
+        await ctx.skills.managed.reconcile("release-notes", company.id);
+        await ctx.skills.managed.reconcile("daily-standup", company.id);
       } catch (err) {
         ctx.logger.warn(`Reconcile failed for company ${company.id}: ${err}`);
       }
@@ -282,9 +350,13 @@ const plugin = definePlugin({
       await ctx.agents.managed.reconcile("github-reviewer", event.companyId);
       await ctx.agents.managed.reconcile("github-triager", event.companyId);
       await ctx.agents.managed.reconcile("ci-companion", event.companyId);
+      await ctx.agents.managed.reconcile("release-reporter", event.companyId);
+      await ctx.agents.managed.reconcile("standup-reporter", event.companyId);
       await ctx.skills.managed.reconcile("github-codebase-access", event.companyId);
       await ctx.skills.managed.reconcile("github-triage", event.companyId);
       await ctx.skills.managed.reconcile("ci-analysis", event.companyId);
+      await ctx.skills.managed.reconcile("release-notes", event.companyId);
+      await ctx.skills.managed.reconcile("daily-standup", event.companyId);
     });
   },
 

@@ -5,6 +5,7 @@ import {
   createSyncLog, completeSyncLog, saveRepoGraph,
 } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
+import { calculateAndSavePRMetrics } from "../metrics/metrics-calculator.js";
 import type { GitHubRepo, GitHubPR, GitHubIssue } from "../types.js";
 
 export async function runFullSync(ctx: PluginContext, companyId: string): Promise<void> {
@@ -113,6 +114,9 @@ export async function runFullSync(ctx: PluginContext, companyId: string): Promis
         await upsertPR(ctx.db, pr);
         await detectAndLinkCards(ctx, pr.id, pr.headBranch, pr.title);
         prsSynced++;
+
+        // Note: full-sync only fetches open PRs, so merged PRs are not re-calculated here.
+        // Merged PR metrics are handled by incremental-sync when a PR transitions to merged.
       }
 
       const { data: issues } = await githubFetch(

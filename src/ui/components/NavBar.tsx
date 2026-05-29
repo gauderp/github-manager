@@ -5,6 +5,8 @@ import { PATHS } from "./shared.js";
 const NAV_ITEMS = [
   { label: "Repositórios", path: PATHS.repos },
   { label: "Pull Requests", path: PATHS.prs },
+  { label: "Métricas", path: PATHS.metrics },
+  { label: "Standups", path: PATHS.standups },
   { label: "Knowledge Graphs", path: PATHS.graphs },
   { label: "Configurações", path: PATHS.settings },
 ];

@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "3.1.0",
+  version: "3.2.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -76,17 +76,35 @@ const manifest: PaperclipPluginManifestV1 = {
         default: "/api/plugins/<plugin-id>/webhooks/github-events",
         readOnly: true,
       },
-      autoReviewEnabled: {
-        type: "boolean",
-        title: "Auto Review Enabled",
-        description: "Automatically assign the github-reviewer agent when a PR is opened or ready for review",
-        default: false,
-      },
       autoTriageEnabled: {
         type: "boolean",
         title: "Auto Triage Enabled",
         description: "Automatically assign the github-triager agent when an issue is opened",
         default: false,
+      },
+      autoReviewEnabled: {
+        type: "boolean",
+        title: "Auto Review Enabled",
+        description: "Automatically create code review cards when a PR is opened via webhook",
+        default: false,
+      },
+      standupTime: {
+        type: "string",
+        title: "Standup Time",
+        description: "Time to run the daily standup report (HH:MM, 24h format). Default: 09:00",
+        default: "09:00",
+      },
+      standupTimezone: {
+        type: "string",
+        title: "Standup Timezone",
+        description: "Timezone for standup scheduling (IANA format). Default: America/Sao_Paulo",
+        default: "America/Sao_Paulo",
+      },
+      standupDays: {
+        type: "string",
+        title: "Standup Days",
+        description: "Days of week to run standup as cron range (e.g. '1-5' for Mon-Fri). Default: 1-5",
+        default: "1-5",
       },
     },
   },
@@ -106,6 +124,12 @@ const manifest: PaperclipPluginManifestV1 = {
       displayName: "Sync GitHub PRs and Issues",
       schedule: "*/5 * * * *",
       description: "Incremental sync of open PRs and issues for tracked repositories",
+    },
+    {
+      jobKey: "daily-standup",
+      displayName: "Daily Standup Report",
+      schedule: "0 9 * * 1-5",
+      description: "Generate daily standup report from GitHub activity (weekdays at 9:00)",
     },
   ],
 
@@ -416,6 +440,95 @@ const manifest: PaperclipPluginManifestV1 = {
         required: ["owner", "repo", "ref"],
       },
     },
+    {
+      name: "github_get_pr_timeline",
+      displayName: "Get PR Timeline",
+      description: "Get the timeline of events for a PR (created, reviewed, approved, merged)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          pull_number: { type: "number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
+      name: "github_get_contributor_stats",
+      displayName: "Get Contributor Stats",
+      description: "Get contributor activity stats (commits, PRs, reviews) for a time period",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          since: { type: "string" },
+          until: { type: "string" },
+        },
+        required: ["owner", "repo", "since"],
+      },
+    },
+    {
+      name: "github_list_commits_between",
+      displayName: "List Commits Between Refs",
+      description: "List commits between two refs (tags, branches, or SHAs)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          base: { type: "string" },
+          head: { type: "string" },
+        },
+        required: ["owner", "repo", "base"],
+      },
+    },
+    {
+      name: "github_list_releases",
+      displayName: "List Releases",
+      description: "List releases for a repository",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          per_page: { type: "number" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+    {
+      name: "github_create_release",
+      displayName: "Create Release",
+      description: "Create a GitHub release with generated notes (always as draft)",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          tag_name: { type: "string" },
+          name: { type: "string" },
+          body: { type: "string" },
+          draft: { type: "boolean" },
+          prerelease: { type: "boolean" },
+        },
+        required: ["owner", "repo", "tag_name", "name", "body"],
+      },
+    },
+    {
+      name: "github_search_code",
+      displayName: "Search Code",
+      description: "Search code across all tracked repositories",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+          owner: { type: "string" },
+        },
+        required: ["query"],
+      },
+    },
   ],
 
   agents: [
@@ -623,6 +736,73 @@ Prioritize analysis in this order:
 `,
       },
     },
+    {
+      agentKey: "release-reporter",
+      displayName: "Release Reporter",
+      role: "release-management",
+      title: "Release Engineer",
+      capabilities: "Generates changelog and release notes from commits and PRs. Creates draft GitHub releases using plugin tools.",
+      instructions: {
+        entryFile: "AGENTS.md",
+        content: `# Release Reporter
+
+You are the release reporter agent. Your job is to generate professional release notes and create draft GitHub releases.
+
+## Available Tools
+
+- **github_list_releases** — Find the last release tag
+- **github_list_commits_between** — Get commits since last release
+- **github_create_release** — Create a draft release (always draft=true)
+- **github_list_repositories** — List tracked repos
+- **github_get_pull_request_diff** — Inspect specific changes if needed
+
+## Workflow
+
+Follow the \`release-notes\` skill instructions injected into your context.
+
+## Rules
+
+- ALWAYS create releases as draft — never publish directly
+- Use conventional commit categorization (feat, fix, chore, docs, refactor, breaking)
+- Keep notes concise: one line per change
+- Include the full changelog URL
+- If no conventional commits, group by merge PR vs direct commit
+`,
+      },
+    },
+    {
+      agentKey: "standup-reporter",
+      displayName: "Standup Reporter",
+      role: "reporting",
+      title: "Engineering Standup Bot",
+      capabilities: "Generates daily standup reports from GitHub activity across tracked repositories. Highlights blocked PRs, merged work, and cross-repo dependencies.",
+      instructions: {
+        entryFile: "AGENTS.md",
+        content: `# Standup Reporter
+
+You are the standup reporter agent. Your job is to produce a clear, useful daily standup report covering all GitHub activity from the last 24 hours.
+
+## Available Tools
+
+- **github_list_repositories** — List all tracked repos
+- **github_search_issues** — Search for recent issues/PRs
+- **github_get_pr_timeline** — Get timeline of a specific PR
+- **github_get_contributor_stats** — Get contributor stats
+- **github_search_code** — Search code for cross-repo correlation
+
+## Workflow
+
+Follow the \`daily-standup\` skill instructions injected into your context.
+
+## Rules
+
+- Be factual and concise
+- Flag PRs >48h without review with a warning
+- Include cross-repo alerts when relevant
+- Maximum 2000 words
+`,
+      },
+    },
   ],
 
   skills: [
@@ -759,6 +939,114 @@ When asked to validate deploy readiness:
 5. Report each gate as PASS/FAIL with detail
 `,
     },
+    {
+      skillKey: "release-notes",
+      displayName: "Release Notes Generation",
+      description: "Guides agents through generating categorized release notes from commits and creating draft GitHub releases",
+      markdown: `# Release Notes Skill
+
+You are the \`release-reporter\` agent. Your job is to generate professional, well-categorized release notes for a GitHub repository and create a draft GitHub release.
+
+## Available Tools
+
+- **github_list_releases** — List existing releases to find the last released tag
+- **github_list_commits_between** — List commits between two refs (base tag → HEAD)
+- **github_create_release** — Create a draft GitHub release with the generated notes
+- **github_list_repositories** — List tracked repos
+
+## Workflow
+
+1. Call \`github_list_releases\` to find the last non-draft release tag (use as \`base\`)
+2. Call \`github_list_commits_between\` with \`base\` = last release tag, \`head\` = HEAD
+3. Categorize commits by conventional commit prefix: feat→Features, fix→Bug Fixes, breaking→Breaking Changes, docs→Documentation, refactor→Refactoring, chore/build/ci→Maintenance
+4. Generate markdown with sections: Breaking Changes, Features, Bug Fixes, Documentation, Refactoring, Maintenance, Other
+5. Call \`github_create_release\` with \`draft: true\` (ALWAYS draft)
+
+## Release Notes Format
+
+\`\`\`
+## What's Changed
+
+### Breaking Changes
+- Description (#NNN) — @author
+
+### Features
+- New feature (#NNN) — @author
+
+### Bug Fixes
+- Fix description (#NNN) — @author
+
+### Maintenance
+- Dependency and CI updates
+
+**Full Changelog:** https://github.com/{owner}/{repo}/compare/{base}...{new_tag}
+\`\`\`
+
+## Rules
+
+- ALWAYS create as draft
+- Skip "Merge branch..." commits unless meaningful
+- Max 50 commits in notes — group remaining as "and N more minor changes"
+- Use imperative mood: "Add X" not "Added X"
+`,
+    },
+    {
+      skillKey: "daily-standup",
+      displayName: "Daily Standup Generation",
+      description: "Guides agents through generating daily standup reports from GitHub activity with cross-repo awareness",
+      markdown: `# Daily Standup Skill
+
+You are the \`standup-reporter\` agent. Generate a daily standup report covering all GitHub activity in the last 24 hours.
+
+## Available Tools
+
+- **github_list_repositories** — List all tracked repos
+- **github_search_issues** — Search recent issues/PRs with queries like \`is:pr updated:>YYYY-MM-DD\`
+- **github_get_pr_timeline** — Get timeline of a specific PR if detail is needed
+- **github_get_contributor_stats** — Contributor stats for the period
+- **github_search_code** — Search code for cross-repo correlation
+
+## Standup Format
+
+\`\`\`
+# Daily Standup — YYYY-MM-DD
+
+## Highlights
+- N PRs merged today
+- N PRs blocked >48h (needs review)
+
+## {repo-full-name}
+### Merged PRs
+- [#NNN Title](url) — @author
+
+### New PRs
+- [#NNN Title](url) — @author
+
+### Awaiting Review
+- [#NNN Title](url) — @author (Nh open ⚠️ if >48h)
+
+### New Issues / Closed Issues
+- [#NNN Title](url) — @author
+\`\`\`
+
+## Cross-Repo Awareness
+
+Add a "Cross-Repo Alerts" section if:
+1. A merged PR modifies API routes/controllers — search other repos that import the service
+2. A merged PR adds database migrations — alert about potential downtime
+3. A merged PR bumps a major dependency version — check for shared consumers
+
+Use \`github_search_code\` for cross-repo lookups.
+
+## Rules
+
+- Be factual, no fluff
+- Use markdown links for all references
+- Flag PRs >48h without review with ⚠️
+- Max 2000 words — prioritize merged PRs and blockers
+- End with generation timestamp
+`,
+    },
   ],
 
   ui: {
@@ -796,6 +1084,20 @@ When asked to validate deploy readiness:
         exportName: "GitHubGraphsPage",
         displayName: "Knowledge Graphs",
         routePath: "github-graphs",
+      },
+      {
+        type: "page",
+        id: "github-metrics",
+        exportName: "GitHubMetricsPage",
+        displayName: "Engineering Metrics",
+        routePath: "github-metrics",
+      },
+      {
+        type: "page",
+        id: "github-standups",
+        exportName: "GitHubStandupPage",
+        displayName: "Daily Standups",
+        routePath: "github-standups",
       },
       {
         type: "dashboardWidget",

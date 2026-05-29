@@ -9,6 +9,8 @@ import type {
   TriageRule,
   TriageRuleInput,
   GitHubWorkflowRun,
+  PRMetrics,
+  StandupReport,
 } from "../types.js";
 
 type DB = PluginContext["db"];
@@ -423,5 +425,157 @@ function mapWorkflowRun(row: Record<string, unknown>): GitHubWorkflowRun {
     htmlUrl:      row.html_url as string,
     createdAt:    row.created_at as string,
     updatedAt:    row.updated_at as string,
+  };
+}
+
+// ── PR Metrics ──
+
+export async function upsertPRMetrics(db: DB, m: PRMetrics): Promise<void> {
+  await db.execute(
+    `INSERT INTO ${S}.gh_pr_metrics
+       (pr_id, repo_id, cycle_time_hours, time_to_first_review_hours,
+        review_rounds, additions, deletions, merged_by, created_at, merged_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (pr_id) DO UPDATE SET
+       cycle_time_hours = EXCLUDED.cycle_time_hours,
+       time_to_first_review_hours = EXCLUDED.time_to_first_review_hours,
+       review_rounds = EXCLUDED.review_rounds,
+       additions = EXCLUDED.additions,
+       deletions = EXCLUDED.deletions,
+       merged_by = EXCLUDED.merged_by,
+       created_at = EXCLUDED.created_at,
+       merged_at = EXCLUDED.merged_at`,
+    [m.prId, m.repoId, m.cycleTimeHours, m.timeToFirstReviewHours,
+     m.reviewRounds, m.additions, m.deletions, m.mergedBy,
+     m.createdAt, m.mergedAt],
+  );
+}
+
+export async function getMetricsByRepo(
+  db: DB,
+  repoId: number,
+  sinceDate: string,
+  untilDate?: string,
+): Promise<PRMetrics[]> {
+  let sql = `SELECT * FROM ${S}.gh_pr_metrics WHERE repo_id = $1 AND merged_at >= $2`;
+  const params: unknown[] = [repoId, sinceDate];
+  if (untilDate) {
+    sql += ` AND merged_at <= $3`;
+    params.push(untilDate);
+  }
+  sql += ` ORDER BY merged_at DESC`;
+  const rows = await db.query(sql, params);
+  return rows.map(mapMetrics);
+}
+
+export async function getMetricsSummary(
+  db: DB,
+  repoId: number,
+  sinceDate: string,
+): Promise<{
+  avgCycleTimeHours: number | null;
+  avgTimeToFirstReviewHours: number | null;
+  avgReviewRounds: number | null;
+  totalMerged: number;
+}> {
+  const rows = await db.query(
+    `SELECT
+       AVG(cycle_time_hours)             AS avg_cycle_time,
+       AVG(time_to_first_review_hours)   AS avg_first_review,
+       AVG(review_rounds)                AS avg_review_rounds,
+       COUNT(*)                          AS total_merged
+     FROM ${S}.gh_pr_metrics
+     WHERE repo_id = $1 AND merged_at >= $2`,
+    [repoId, sinceDate],
+  );
+  const r = rows[0] as Record<string, unknown>;
+  return {
+    avgCycleTimeHours: r.avg_cycle_time != null ? Number(r.avg_cycle_time) : null,
+    avgTimeToFirstReviewHours: r.avg_first_review != null ? Number(r.avg_first_review) : null,
+    avgReviewRounds: r.avg_review_rounds != null ? Number(r.avg_review_rounds) : null,
+    totalMerged: Number(r.total_merged ?? 0),
+  };
+}
+
+function mapMetrics(row: Record<string, unknown>): PRMetrics {
+  return {
+    prId: row.pr_id as number,
+    repoId: row.repo_id as number,
+    cycleTimeHours: row.cycle_time_hours != null ? Number(row.cycle_time_hours) : null,
+    timeToFirstReviewHours: row.time_to_first_review_hours != null ? Number(row.time_to_first_review_hours) : null,
+    reviewRounds: Number(row.review_rounds ?? 0),
+    additions: Number(row.additions ?? 0),
+    deletions: Number(row.deletions ?? 0),
+    mergedBy: row.merged_by as string | null,
+    createdAt: row.created_at as string | null,
+    mergedAt: row.merged_at as string | null,
+  };
+}
+
+// ── Standup Reports ──
+
+export async function upsertStandupReport(
+  db: DB,
+  report: Omit<StandupReport, "id">,
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO ${S}.gh_standup_reports
+       (company_id, report_date, report_markdown, repos_included, contributors, highlights, generated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (company_id, report_date) DO UPDATE SET
+       report_markdown = EXCLUDED.report_markdown,
+       repos_included  = EXCLUDED.repos_included,
+       contributors    = EXCLUDED.contributors,
+       highlights      = EXCLUDED.highlights,
+       generated_at    = EXCLUDED.generated_at`,
+    [
+      report.companyId,
+      report.reportDate,
+      report.reportMarkdown,
+      JSON.stringify(report.reposIncluded),
+      JSON.stringify(report.contributors),
+      JSON.stringify(report.highlights),
+      report.generatedAt,
+    ],
+  );
+}
+
+export async function listStandupReports(
+  db: DB,
+  companyId: string,
+  limit = 30,
+): Promise<StandupReport[]> {
+  const rows = await db.query(
+    `SELECT * FROM ${S}.gh_standup_reports
+     WHERE company_id = $1
+     ORDER BY report_date DESC
+     LIMIT $2`,
+    [companyId, limit],
+  );
+  return rows.map(mapStandup);
+}
+
+export async function getStandupReport(
+  db: DB,
+  companyId: string,
+  reportDate: string,
+): Promise<StandupReport | null> {
+  const rows = await db.query(
+    `SELECT * FROM ${S}.gh_standup_reports WHERE company_id = $1 AND report_date = $2`,
+    [companyId, reportDate],
+  );
+  return rows.length > 0 ? mapStandup(rows[0]) : null;
+}
+
+function mapStandup(row: Record<string, unknown>): StandupReport {
+  return {
+    id: row.id as number,
+    companyId: row.company_id as string,
+    reportDate: row.report_date as string,
+    reportMarkdown: row.report_markdown as string,
+    reposIncluded: JSON.parse((row.repos_included as string) || "[]"),
+    contributors: JSON.parse((row.contributors as string) || "[]"),
+    highlights: JSON.parse((row.highlights as string) || "[]"),
+    generatedAt: row.generated_at as string,
   };
 }
