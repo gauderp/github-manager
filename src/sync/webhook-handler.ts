@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PluginContext, PluginWebhookInput } from "@paperclipai/plugin-sdk";
 import { upsertRepo, upsertPR, upsertIssue, linkPRToCard, getRepoByFullName, upsertWorkflowRun } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
+import { updateKnowledgeGraphFromPR } from "../knowledge/knowledge-graph.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
 function verifyWebhookSignature(rawBody: string, signature: string, secret: string): boolean {
@@ -162,6 +163,20 @@ async function handlePullRequestEvent(
       ctx.logger.info(`Webhook: auto-created review issue for PR #${pr.number} (autoReview=${autoReviewEnabled})`);
     } catch (err) {
       ctx.logger.error(`Webhook: failed to create review issue for PR #${pr.number}: ${err}`);
+    }
+  }
+
+  // Phase 4: update knowledge graph when PR is merged
+  if (action === "closed" && merged) {
+    try {
+      const companies = await ctx.companies.list();
+      if (companies.length > 0) {
+        const companyId = companies[0].id;
+        await updateKnowledgeGraphFromPR(ctx, companyId, prData);
+        ctx.logger.info(`Webhook: updated knowledge graph from merged PR #${pr.number}`);
+      }
+    } catch (err) {
+      ctx.logger.error(`Webhook: knowledge graph update failed for PR #${pr.number}: ${err}`);
     }
   }
 }

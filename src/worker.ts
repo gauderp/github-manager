@@ -15,11 +15,14 @@ import {
   getRepoByFullName,
   listTriageRules, upsertTriageRule, updateTriageRule, deleteTriageRule,
   listStandupReports, getMetricsSummary, getMetricsByRepo,
+  listDecisions, getKnowledgeNodes, getKnowledgeEdges,
 } from "./db/queries.js";
 import { saveGithubPAT, saveGithubSecretRef, resolveGithubToken } from "./github/config.js";
 import { githubFetch } from "./github/api-client.js";
 import { registerMetricsTools } from "./metrics/metrics-tools.js";
 import { registerReleaseTools } from "./releases/release-tools.js";
+import { registerKnowledgeTools } from "./knowledge/knowledge-tools.js";
+import { extractDecisionsAllRepos, extractDecisionsForRepo } from "./knowledge/decision-extractor.js";
 import { generateAndSaveStandupReport } from "./metrics/standup-generator.js";
 
 let pluginCtx: PluginContext | null = null;
@@ -27,7 +30,7 @@ let pluginCtx: PluginContext | null = null;
 const plugin = definePlugin({
   async setup(ctx) {
     pluginCtx = ctx;
-    ctx.logger.info("GitHub Manager v3.1 starting");
+    ctx.logger.info("GitHub Manager v4.0 starting");
 
     // ── Tools ──
     registerReviewTools(ctx);
@@ -35,6 +38,7 @@ const plugin = definePlugin({
     registerCITools(ctx);
     registerMetricsTools(ctx);
     registerReleaseTools(ctx);
+    registerKnowledgeTools(ctx);
 
     // ── Jobs ──
     ctx.jobs.register("sync-github", async (job) => {
@@ -136,6 +140,34 @@ const plugin = definePlugin({
       if (!companyId) return { reports: [] };
       const reports = await listStandupReports(ctx.db, companyId as string, (limit as number) ?? 30);
       return { reports };
+    });
+
+    ctx.data.register("decision-log", async ({ companyId, repoFullName, repoId, status, search }) => {
+      let resolvedRepoId = repoId as number | undefined;
+      if (!resolvedRepoId && repoFullName) {
+        const repo = await getRepoByFullName(ctx.db, repoFullName as string);
+        if (!repo) return { decisions: [] };
+        resolvedRepoId = repo.id;
+      }
+      if (!resolvedRepoId) return { decisions: [] };
+      const decisions = await listDecisions(ctx.db, resolvedRepoId, {
+        status: status as string | undefined,
+        search: search as string | undefined,
+      });
+      return { decisions };
+    });
+
+    ctx.data.register("knowledge-graph-data", async ({ companyId, repoFullName, repoId, nodeType, minWeight }) => {
+      let resolvedRepoId = repoId as number | undefined;
+      if (!resolvedRepoId && repoFullName) {
+        const repo = await getRepoByFullName(ctx.db, repoFullName as string);
+        if (!repo) return { nodes: [], edges: [] };
+        resolvedRepoId = repo.id;
+      }
+      if (!resolvedRepoId) return { nodes: [], edges: [] };
+      const nodes = await getKnowledgeNodes(ctx.db, resolvedRepoId, nodeType as string | undefined);
+      const edges = await getKnowledgeEdges(ctx.db, resolvedRepoId, minWeight as number | undefined);
+      return { nodes, edges };
     });
 
     // ── Action handlers (UI writes) ──
@@ -326,6 +358,44 @@ const plugin = definePlugin({
       return { ok: true, issueId: issue.id };
     });
 
+    ctx.actions.register("generate-onboarding-docs", async ({ companyId, repoFullName }) => {
+      const [owner, repoName] = (repoFullName as string).split("/");
+      const issue = await ctx.issues.create({
+        companyId: companyId as string,
+        title: `Onboarding Docs: ${repoFullName}`,
+        description: [
+          `Generate comprehensive onboarding documentation for **${repoFullName}**.`,
+          ``,
+          `## Instructions`,
+          `Follow the \`onboarding-docs\` skill workflow:`,
+          `1. \`github_get_repo_structure\` with repo_full_name="${repoFullName}"`,
+          `2. \`github_get_repo_knowledge_graph\` with owner="${owner}", repo="${repoName}"`,
+          `3. \`github_get_readme\` with owner="${owner}", repo="${repoName}"`,
+          `4. \`github_get_contributing_guide\` with owner="${owner}", repo="${repoName}"`,
+          `5. \`github_get_contributor_stats\` with owner="${owner}", repo="${repoName}", since="${new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}"`,
+          `6. Produce the onboarding guide as your card resolution.`,
+        ].join("\n"),
+        originKind: "plugin_github_onboarding",
+        originId: `onboarding:${repoFullName}`,
+      });
+      return { ok: true, issueId: issue.id };
+    });
+
+    ctx.actions.register("extract-decisions", async ({ companyId, repoFullName }) => {
+      try {
+        if (repoFullName) {
+          const count = await extractDecisionsForRepo(
+            ctx, companyId as string, repoFullName as string,
+          );
+          return { ok: true, extracted: count };
+        }
+        await extractDecisionsAllRepos(ctx, companyId as string);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    });
+
     // ── Managed resource reconciliation ──
     // Reconcile for existing companies on startup
     const companies = await ctx.companies.list();
@@ -341,6 +411,8 @@ const plugin = definePlugin({
         await ctx.skills.managed.reconcile("ci-analysis", company.id);
         await ctx.skills.managed.reconcile("release-notes", company.id);
         await ctx.skills.managed.reconcile("daily-standup", company.id);
+        await ctx.agents.managed.reconcile("docs-generator", company.id);
+        await ctx.skills.managed.reconcile("onboarding-docs", company.id);
       } catch (err) {
         ctx.logger.warn(`Reconcile failed for company ${company.id}: ${err}`);
       }
@@ -357,11 +429,13 @@ const plugin = definePlugin({
       await ctx.skills.managed.reconcile("ci-analysis", event.companyId);
       await ctx.skills.managed.reconcile("release-notes", event.companyId);
       await ctx.skills.managed.reconcile("daily-standup", event.companyId);
+      await ctx.agents.managed.reconcile("docs-generator", event.companyId);
+      await ctx.skills.managed.reconcile("onboarding-docs", event.companyId);
     });
   },
 
   async onHealth() {
-    return { status: "ok", message: "GitHub Manager v3.1 running" };
+    return { status: "ok", message: "GitHub Manager v4.0 running" };
   },
 
   async onWebhook(input) {
