@@ -353,6 +353,13 @@ async function handleWorkflowRunEvent(
   const headSha = (runData.head_sha as string).slice(0, 7);
 
   try {
+    // Optionally attach the ci-companion agent for automatic analysis
+    let ciAgentId: string | undefined;
+    try {
+      const ciAgent = await ctx.agents.managed.get("ci-companion", companyId);
+      ciAgentId = ciAgent?.agentId ?? undefined;
+    } catch { /* agent not reconciled yet */ }
+
     const cardDescription = buildCIAnalysisInstructions({
       owner, repo: repoName, repoFullName,
       runId, runNumber, workflowName,
@@ -365,6 +372,7 @@ async function handleWorkflowRunEvent(
       description: cardDescription,
       originKind: "plugin:github_ci_failure",
       originId: `${repoFullName}#run-${runId}`,
+      ...(ciAgentId ? { agentId: ciAgentId } : {}),
     });
 
     ctx.logger.info(
