@@ -2,6 +2,8 @@ import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import type { PluginContext } from "@paperclipai/plugin-sdk";
 import { registerReviewTools } from "./review/review-tools.js";
 import { registerTriageTools } from "./triage/triage-tools.js";
+import { registerCITools } from "./ci/ci-tools.js";
+import { runDeployGate, formatDeployGateResult } from "./ci/deploy-gate.js";
 import { handleGithubWebhook } from "./sync/webhook-handler.js";
 import { runIncrementalSync } from "./sync/incremental-sync.js";
 import { runFullSync } from "./sync/full-sync.js";
@@ -21,11 +23,12 @@ let pluginCtx: PluginContext | null = null;
 const plugin = definePlugin({
   async setup(ctx) {
     pluginCtx = ctx;
-    ctx.logger.info("GitHub Manager v3 starting");
+    ctx.logger.info("GitHub Manager v3.1 starting");
 
     // ── Tools ──
     registerReviewTools(ctx);
     registerTriageTools(ctx);
+    registerCITools(ctx);
 
     // ── Jobs ──
     ctx.jobs.register("sync-github", async (job) => {
@@ -244,6 +247,21 @@ const plugin = definePlugin({
       return { ok: true };
     });
 
+    ctx.actions.register("run-deploy-gate", async ({ companyId, repoFullName, prNumber, targetEnvironment }) => {
+      const [owner, repo] = (repoFullName as string).split("/");
+      const result = await runDeployGate(ctx, companyId as string, {
+        owner,
+        repo,
+        pullNumber: prNumber as number,
+        targetEnvironment: targetEnvironment as string | undefined,
+      });
+      return {
+        passed:  result.passed,
+        summary: formatDeployGateResult(result),
+        checks:  result.checks,
+      };
+    });
+
     // ── Managed resource reconciliation ──
     // Reconcile for existing companies on startup
     const companies = await ctx.companies.list();
@@ -251,8 +269,10 @@ const plugin = definePlugin({
       try {
         await ctx.agents.managed.reconcile("github-reviewer", company.id);
         await ctx.agents.managed.reconcile("github-triager", company.id);
+        await ctx.agents.managed.reconcile("ci-companion", company.id);
         await ctx.skills.managed.reconcile("github-codebase-access", company.id);
         await ctx.skills.managed.reconcile("github-triage", company.id);
+        await ctx.skills.managed.reconcile("ci-analysis", company.id);
       } catch (err) {
         ctx.logger.warn(`Reconcile failed for company ${company.id}: ${err}`);
       }
@@ -261,13 +281,15 @@ const plugin = definePlugin({
     ctx.events.on("company.created", async (event) => {
       await ctx.agents.managed.reconcile("github-reviewer", event.companyId);
       await ctx.agents.managed.reconcile("github-triager", event.companyId);
+      await ctx.agents.managed.reconcile("ci-companion", event.companyId);
       await ctx.skills.managed.reconcile("github-codebase-access", event.companyId);
       await ctx.skills.managed.reconcile("github-triage", event.companyId);
+      await ctx.skills.managed.reconcile("ci-analysis", event.companyId);
     });
   },
 
   async onHealth() {
-    return { status: "ok", message: "GitHub Manager v3 running" };
+    return { status: "ok", message: "GitHub Manager v3.1 running" };
   },
 
   async onWebhook(input) {
