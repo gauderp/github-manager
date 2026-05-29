@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { label: "Métricas", path: PATHS.metrics },
   { label: "Standups", path: PATHS.standups },
   { label: "Knowledge Graphs", path: PATHS.graphs },
+  { label: "Decisions", path: PATHS.decisions },
   { label: "Configurações", path: PATHS.settings },
 ];
 

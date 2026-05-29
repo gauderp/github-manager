@@ -9,6 +9,7 @@ export { GitHubPullRequestsPage } from "./components/PullRequestsPage.js";
 export { GitHubGraphsPage } from "./components/GraphsPage.js";
 export { GitHubMetricsPage } from "./components/MetricsPage.js";
 export { GitHubStandupPage } from "./components/StandupPage.js";
+export { GitHubDecisionsPage } from "./components/DecisionsPage.js";
 
 // Detail tab (inside cards)
 export { GitHubDetailTab } from "./components/DetailTab.js";

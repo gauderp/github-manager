@@ -2,7 +2,7 @@ import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 
 const manifest: PaperclipPluginManifestV1 = {
   id: "cus.github-manager",
-  version: "3.2.0",
+  version: "4.0.0",
   apiVersion: 1,
   displayName: "GitHub Manager",
   description: "Manage GitHub repos, PRs, issues, agent code reviews, and knowledge graphs — all from Paperclip",
@@ -529,6 +529,62 @@ const manifest: PaperclipPluginManifestV1 = {
         required: ["query"],
       },
     },
+    {
+      name: "github_get_repo_knowledge_graph",
+      displayName: "Get Repo Knowledge Graph",
+      description: "Get the accumulated knowledge graph for a repository, showing modules, components, services, dependencies and their relationships built from merged PRs.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          node_type: { type: "string", description: "Filter by node type: module, pattern, dependency, api_endpoint, component, service" },
+          min_weight: { type: "number", description: "Minimum edge weight to include" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+    {
+      name: "github_get_readme",
+      displayName: "Get README",
+      description: "Get the README content of a repository",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+    {
+      name: "github_get_contributing_guide",
+      displayName: "Get Contributing Guide",
+      description: "Get the CONTRIBUTING guide of a repository if it exists",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+    {
+      name: "github_list_discussions",
+      displayName: "List Discussions",
+      description: "List discussions in a repository using the GitHub GraphQL API. Requires GitHub Discussions to be enabled.",
+      parametersSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string" },
+          repo: { type: "string" },
+          category: { type: "string", description: "Filter by category slug" },
+          per_page: { type: "number", description: "Number of discussions to fetch (max 50)" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
   ],
 
   agents: [
@@ -803,6 +859,40 @@ Follow the \`daily-standup\` skill instructions injected into your context.
 `,
       },
     },
+    {
+      agentKey: "docs-generator",
+      displayName: "Documentation Engineer",
+      role: "documentation",
+      title: "Documentation Engineer",
+      capabilities: "Generates onboarding guides and extracts architectural decision records (ADRs) from GitHub repositories using plugin tools.",
+      instructions: {
+        entryFile: "DOCS_AGENT.md",
+        content: `# Documentation Engineer
+
+You generate onboarding documentation and extract architectural decision records (ADRs) from GitHub repositories.
+
+## When asked to generate onboarding docs
+
+Follow the onboarding-docs skill workflow:
+1. \`github_get_repo_structure\` — understand the codebase layout
+2. \`github_get_repo_knowledge_graph\` — see modules and their relationships
+3. \`github_get_readme\` — get existing README (extract setup instructions)
+4. \`github_get_contributing_guide\` — get CONTRIBUTING guide if it exists
+5. \`github_get_contributor_stats\` — identify key contributors
+6. Produce the onboarding guide as your card resolution
+
+## When asked to extract decisions
+
+1. Use \`github_list_discussions\` to find RFC/architecture discussions
+2. Structure each decision as an ADR with Context, Decision, and Consequences sections
+3. Complete the card with the list of decisions found
+
+## Output format
+
+Always produce clean markdown. Never output JSON or raw API responses to the user.
+`,
+      },
+    },
   ],
 
   skills: [
@@ -1047,6 +1137,44 @@ Use \`github_search_code\` for cross-repo lookups.
 - End with generation timestamp
 `,
     },
+    {
+      skillKey: "onboarding-docs",
+      displayName: "Onboarding Docs Generator",
+      description: "Provides agents with the workflow to generate onboarding documentation and extract ADRs from GitHub repositories",
+      markdown: `# Onboarding Docs Generator
+
+You generate comprehensive onboarding documentation for GitHub repositories.
+
+## Workflow
+
+1. **Understand the structure**
+   - \`github_get_repo_structure\` with \`repo_full_name="owner/repo"\`
+   - \`github_get_repo_knowledge_graph\` with \`owner\` and \`repo\`
+
+2. **Gather documentation sources**
+   - \`github_get_readme\` — extract setup instructions verbatim
+   - \`github_get_contributing_guide\` — get contribution process
+
+3. **Understand the team**
+   - \`github_get_contributor_stats\` with \`since\` = 90 days ago ISO string
+
+4. **Generate the onboarding guide** with these sections:
+   - Overview (1-2 paragraphs from README)
+   - Architecture (modules/components from knowledge graph)
+   - Module Map (table: module, responsibility, key files)
+   - Getting Started (setup commands verbatim from README)
+   - Codebase Navigation (key directories and their purpose)
+   - Team and Ownership (who contributes to which modules)
+   - Contributing (PR process, review requirements)
+
+## Rules
+
+- NEVER make up file paths or module names — only use what tools return
+- Setup instructions MUST be exact — copy commands verbatim from README
+- Keep the total guide under 3000 words
+- Use plain markdown — no HTML
+`,
+    },
   ],
 
   ui: {
@@ -1098,6 +1226,13 @@ Use \`github_search_code\` for cross-repo lookups.
         exportName: "GitHubStandupPage",
         displayName: "Daily Standups",
         routePath: "github-standups",
+      },
+      {
+        type: "page",
+        id: "github-decisions",
+        exportName: "GitHubDecisionsPage",
+        displayName: "Decisions (ADRs)",
+        routePath: "github-decisions",
       },
       {
         type: "dashboardWidget",
