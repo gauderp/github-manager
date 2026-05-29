@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { PluginContext, PluginWebhookInput } from "@paperclipai/plugin-sdk";
-import { upsertRepo, upsertPR, upsertIssue, linkPRToCard, getRepoByFullName } from "../db/queries.js";
+import { upsertRepo, upsertPR, upsertIssue, linkPRToCard, getRepoByFullName, upsertWorkflowRun } from "../db/queries.js";
 import { detectAndLinkCards } from "./link-detector.js";
 import type { GitHubPR, GitHubIssue } from "../types.js";
 
@@ -37,6 +37,8 @@ export async function handleGithubWebhook(
     await handlePullRequestEvent(ctx, payload);
   } else if (event === "issues") {
     await handleIssuesEvent(ctx, payload);
+  } else if (event === "workflow_run") {
+    await handleWorkflowRunEvent(ctx, payload);
   } else {
     ctx.logger.info(`Ignoring GitHub event: ${event}`);
   }
@@ -263,4 +265,165 @@ async function handleIssuesEvent(
       ctx.logger.error(`Webhook: failed to create triage card for issue #${issue.number}: ${err}`);
     }
   }
+}
+
+async function handleWorkflowRunEvent(
+  ctx: PluginContext,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const action = payload.action as string;
+  const runData = payload.workflow_run as Record<string, unknown>;
+  const repoData = payload.repository as Record<string, unknown>;
+
+  if (!runData || !repoData) return;
+
+  // Only react to completed failures
+  if (action !== "completed" || runData.conclusion !== "failure") {
+    ctx.logger.info(
+      `Ignoring workflow_run event: action=${action} conclusion=${runData.conclusion}`,
+    );
+    return;
+  }
+
+  // Ensure the repo is in our DB
+  await upsertRepo(ctx.db, {
+    id:            repoData.id as number,
+    fullName:      repoData.full_name as string,
+    owner:         (repoData.owner as Record<string, unknown>).login as string,
+    name:          repoData.name as string,
+    private:       repoData.private as boolean,
+    defaultBranch: repoData.default_branch as string,
+    htmlUrl:       repoData.html_url as string,
+    description:   repoData.description as string | null,
+    language:      repoData.language as string | null,
+    topics:        (repoData.topics as string[]) ?? [],
+    updatedAt:     repoData.updated_at as string,
+  });
+
+  const repoFullName = repoData.full_name as string;
+  const repo = await getRepoByFullName(ctx.db, repoFullName);
+  if (!repo) {
+    ctx.logger.warn(`workflow_run: repo not found in DB after upsert: ${repoFullName}`);
+    return;
+  }
+
+  // Extract PR number if any PR is associated with this run
+  const prList = (runData.pull_requests as Array<Record<string, unknown>>) ?? [];
+  const prNumber = prList.length > 0 ? (prList[0].number as number) : null;
+
+  // Save run to DB
+  await upsertWorkflowRun(ctx.db, {
+    id:           runData.id as number,
+    repoId:       repo.id,
+    runNumber:    runData.run_number as number,
+    workflowName: runData.name as string,
+    headBranch:   runData.head_branch as string | null,
+    headSha:      runData.head_sha as string | null,
+    status:       runData.status as string,
+    conclusion:   runData.conclusion as string,
+    prNumber,
+    logsSummary:  null,
+    analyzedAt:   null,
+    htmlUrl:      runData.html_url as string,
+  });
+
+  ctx.logger.info(
+    `workflow_run: saved run #${runData.run_number} (${runData.name}) for ${repoFullName}`,
+  );
+
+  // Check if CI Companion is enabled for this instance
+  const config = await ctx.config.get();
+  const ciEnabled = config?.ciCompanionEnabled as boolean | undefined;
+  if (!ciEnabled) {
+    ctx.logger.info("workflow_run: ci-companion disabled — skipping card creation");
+    return;
+  }
+
+  // Get all companies (single-tenant assumption consistent with existing code)
+  const companies = await ctx.companies.list();
+  if (companies.length === 0) return;
+  const companyId = companies[0].id;
+
+  // Build the analysis instructions for the ci-companion agent
+  const [owner, repoName] = repoFullName.split("/");
+  const runId = runData.id as number;
+  const runNumber = runData.run_number as number;
+  const workflowName = runData.name as string;
+  const headBranch = runData.head_branch as string;
+  const headSha = (runData.head_sha as string).slice(0, 7);
+
+  try {
+    const cardDescription = buildCIAnalysisInstructions({
+      owner, repo: repoName, repoFullName,
+      runId, runNumber, workflowName,
+      headBranch, headSha, prNumber,
+    });
+
+    const issue = await ctx.issues.create({
+      companyId,
+      title: `CI Failed: ${workflowName} on ${headBranch} (${headSha})`,
+      description: cardDescription,
+      originKind: "plugin:github_ci_failure",
+      originId: `${repoFullName}#run-${runId}`,
+    });
+
+    ctx.logger.info(
+      `workflow_run: created ci-companion card ${issue.id} for run #${runNumber}`,
+    );
+  } catch (err) {
+    ctx.logger.error(`workflow_run: failed to create card: ${err}`);
+  }
+}
+
+function buildCIAnalysisInstructions(opts: {
+  owner: string;
+  repo: string;
+  repoFullName: string;
+  runId: number;
+  runNumber: number;
+  workflowName: string;
+  headBranch: string;
+  headSha: string;
+  prNumber: number | null;
+}): string {
+  const prLine = opts.prNumber
+    ? `Associated PR: #${opts.prNumber} — https://github.com/${opts.repoFullName}/pull/${opts.prNumber}`
+    : "No associated PR (direct push or scheduled run).";
+
+  return [
+    `A CI/CD workflow has failed and needs analysis.`,
+    ``,
+    `## Failure Details`,
+    `- **Repository:** ${opts.repoFullName}`,
+    `- **Workflow:** ${opts.workflowName}`,
+    `- **Run:** #${opts.runNumber} (ID: ${opts.runId})`,
+    `- **Branch:** ${opts.headBranch} @ ${opts.headSha}`,
+    `- ${prLine}`,
+    ``,
+    `## Analysis Instructions`,
+    ``,
+    `1. Use \`github_get_workflow_run_jobs\` with owner="${opts.owner}", repo="${opts.repo}", run_id=${opts.runId}`,
+    `   → Identify which jobs failed and note their names.`,
+    ``,
+    `2. Use \`github_get_workflow_run_logs\` with owner="${opts.owner}", repo="${opts.repo}", run_id=${opts.runId}, job_name=<failed_job_name>`,
+    `   → Extract the exact error message and failing step.`,
+    opts.prNumber ? [
+      ``,
+      `3. Use \`github_get_pull_request_diff\` with owner="${opts.owner}", repo="${opts.repo}", pull_number=${opts.prNumber}`,
+      `   → Correlate the error with the changes in this PR.`,
+      ``,
+      `4. Use \`github_read_file_content\` to read the specific file that caused the error.`,
+      ``,
+      `5. Use \`github_add_comment\` with owner="${opts.owner}", repo="${opts.repo}", issue_number=${opts.prNumber}`,
+      `   → Post your analysis (error summary, root cause, fix suggestion).`,
+    ].join("\n") : [
+      ``,
+      `3. Use \`github_read_file_content\` to read the specific file that caused the error.`,
+      ``,
+      `4. Summarize the failure in your response — no PR to comment on.`,
+    ].join("\n"),
+    ``,
+    `## Links`,
+    `- Workflow run: https://github.com/${opts.repoFullName}/actions/runs/${opts.runId}`,
+  ].join("\n");
 }
